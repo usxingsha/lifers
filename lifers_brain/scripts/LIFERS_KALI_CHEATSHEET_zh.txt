@@ -1,10 +1,20 @@
 Lifers Kali — 一页速查（跟着跑）
 ================================
 
+【路径与账号 — 看不到脚本时先看这条】
+  代码默认在 **用户 kali** 家目录：/home/kali/lifers/lifers_brain
+  若终端提示符是 root@kali，则 **~ 是 /root**，~/lifers/... 常不存在 → 请：
+    cd /home/kali/lifers/lifers_brain
+  或先：su - kali
+  若提示「找不到 show_train_progress.py」：本机仓库未同步到这份路径 → 在 Windows 跑
+    lifers_brain\scripts\push_brain_and_loop_kali.ps1
+  或在 Kali（kali 用户）里：git -C /home/kali/lifers pull
+  weights/.train_status.json 只有 **新版训练在跑/跑过** 才会生成；旧目录或训练未写入前 cat 会报「没有那个文件」。
+
 【现在就该会的】
   tmux attach -t lifers-stack          看训练画面
-  tail -f ~/lifers_full_stack.log     看循环日志
-  cd ~/lifers/lifers_brain
+  tail -f ~/lifers_full_stack.log     看循环日志（kali 用户下 ~ 即 /home/kali）
+  cd /home/kali/lifers/lifers_brain    # 推荐写绝对路径，避免 root/su 搞错 ~
   python3 scripts/show_train_progress.py   # ramp/SGD 百分比：weights/.train_status.json
   # Windows 本机一键看 Kali：lifers_brain\scripts\kali_train_status.ps1
   # VSCodium「LIFERS 总控」打开后会 SSH 轮询同一份 .train_status.json（需 lifers.kaliSshPrefix 等已配置）

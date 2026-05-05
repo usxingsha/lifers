@@ -8,7 +8,7 @@
 #
 # 环境变量（可选）：
 #   LIFERS_TRAIN_TMUX_SESSION   默认 lifers-stack
-#   LIFERS_TRAIN_LOG            默认 ~/lifers_full_stack.log
+#   LIFERS_TRAIN_LOG            默认 ~/lifers/lifers_full_stack.log（与仓库根同层）
 #   LIFERS_ESCALATE_UNLIMITED   默认 1
 #   LIFERS_RAMP_MAX_ITERS       默认 999999
 #   LIFERS_PAUSE_ON_CHECKPOINT  每满 B 档 checkpoint 后 pause，便于同步（默认不设）
@@ -57,7 +57,7 @@ printf 'run\n' >"$BR/weights/.train_control"
 echo "[lifers-bootstrap] control=run -> $BR/weights/.train_control"
 
 SESSION="${LIFERS_TRAIN_TMUX_SESSION:-lifers-stack}"
-LOG="${LIFERS_TRAIN_LOG:-$HOME/lifers_full_stack.log}"
+LOG="${LIFERS_TRAIN_LOG:-$HOME/lifers/lifers_full_stack.log}"
 mkdir -p "$(dirname "$LOG")" 2>/dev/null || true
 
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/lifers"

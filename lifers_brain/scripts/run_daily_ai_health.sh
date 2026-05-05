@@ -6,7 +6,7 @@
 #   LIFERS_DAILY_HEALTH_AUTO_REMEDIATE=1 ./scripts/run_daily_ai_health.sh
 #
 # Cron (Kali), e.g. 04:30 daily:
-#   30 4 * * * cd /home/kali/lifers/lifers_brain && /usr/bin/env bash scripts/run_daily_ai_health.sh >>/tmp/lifers_daily_health.log 2>&1
+#   30 4 * * * cd ~/lifers/lifers_brain && /usr/bin/env bash scripts/run_daily_ai_health.sh >>/tmp/lifers_daily_health.log 2>&1
 
 set -euo pipefail
 BRAIN="$(cd "$(dirname "$0")/.." && pwd)"

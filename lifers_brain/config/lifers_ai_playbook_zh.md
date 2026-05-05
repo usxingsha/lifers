@@ -68,7 +68,7 @@
 
 ### 9.2 Kali 长期训练（别误杀进程）
 
-- **tmux 会话名**：`lifers-stack`；看画面：`tmux attach -t lifers-stack`；日志：`tail -f ~/lifers_full_stack.log`
+- **tmux 会话名**：`lifers-stack`；看画面：`tmux attach -t lifers-stack`；日志：`tail -f ~/lifers/lifers_full_stack.log`
 - **控制文件**：`weights/.train_control` 里 **run / pause / stop**；或 `scripts/lifers_train_ctl.sh run|pause|stop`
 - **常见错误**：对 `pgrep` 里的 **tmux 父进程** 执行 **`kill PID`** 会干掉**整个 tmux server**，连 `lifers-stack` 一起没——**只**用 **`tmux kill-session -t 会话名`**
 - **Windows 推代码到 Kali（tar 默认不含 weights，避免覆盖大权重）**：`lifers_brain\scripts\push_brain_and_loop_kali.ps1`

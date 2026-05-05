@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # 写入 pause 到常见 brain 路径的 weights/.train_control（含 sudo 探测 /root 下目录）。
 set -euo pipefail
-for d in /home/kali/lifers/lifers_brain /home/kali/lifers_brain; do
+LR="${LIFERS_ROOT:-$HOME/lifers}"
+for d in "$LR/lifers_brain" "$HOME/lifers_brain"; do
   if [[ -d "$d" ]]; then
     mkdir -p "$d/weights"
     printf 'pause\n' >"$d/weights/.train_control"

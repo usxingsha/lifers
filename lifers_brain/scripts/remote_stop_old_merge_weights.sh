@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run on Kali: pause training, stop old tmux lifers-train, merge latest checkpoint into lifers_transformer.json, resume run.
 set -eu
-BR="${LIFERS_BRAIN:-/home/kali/lifers/lifers_brain}"
+BR="${LIFERS_BRAIN:-$HOME/lifers/lifers_brain}"
 BR="$(cd "$BR" && pwd)"
 W="$BR/weights"
 mkdir -p "$W"

@@ -5,7 +5,8 @@
   "source_authoritative": {
     "host": "kali",
     "path": "/home/kali/claw-code/rust",
-    "workspace_members_glob": "crates/*"
+    "workspace_members_glob": "crates/*",
+    "note_zh": "Lifers 打包与运行时以 third_party/claw_code_rust 为准；~/claw-code 仅为历史或对照检出，不必再复制进 lifers 根目录。"
   },
   "bundle": {
     "relative_path": "lifers_brain/dist/claw_rust_merged.tgz",

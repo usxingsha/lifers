@@ -91,4 +91,4 @@ $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remoteUnix))
 & $ssh @sshOpts $KaliHost "echo $b64 | base64 -d | bash -s --"
 if ($LASTEXITCODE -ne 0) { throw "remote extract/bootstrap failed" }
 
-Write-Host "OK. On Kali: tmux attach -t lifers-stack   |   tail -f ~/lifers_full_stack.log"
+Write-Host "OK. On Kali: tmux attach -t lifers-stack   |   tail -f ~/lifers/lifers_full_stack.log"

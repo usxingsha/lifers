@@ -7,7 +7,7 @@
 #   LIFERS_KALI_TRAIN_MODE=extreme bash scripts/kali_install_full_train.sh
 #   bash scripts/kali_install_full_train.sh --enable-boot ~/lifers_kali.tar.gz
 #   bash scripts/kali_install_full_train.sh --detach-train
-#       → 训练阶段在 tmux（或 nohup）里跑，断 SSH 也不断；日志 ~/lifers_install.log
+#       → 训练阶段在 tmux（或 nohup）里跑，断 SSH 也不断；日志默认 ~/lifers/lifers_install.log
 #
 # 环境变量：
 #   LIFERS_KALI_DEST      解压父目录，默认 ~/lifers

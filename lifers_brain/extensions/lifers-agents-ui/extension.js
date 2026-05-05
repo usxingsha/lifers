@@ -1308,7 +1308,7 @@ class LifersAgentsController {
     }
     const scriptPath = path.join(root, 'scripts', 'package_rs_for_kali.ps1');
     if (!fs.existsSync(scriptPath)) return `找不到 ${scriptPath}`;
-    const dest = String(conf.get('kaliScpDestination') || 'kali@192.168.234.152:/home/kali/lifers_kali.tar.gz').trim();
+    const dest = String(conf.get('kaliScpDestination') || 'kali@192.168.234.152:/tmp/lifers_kali_incoming.tar.gz').trim();
     const dist = path.join(root, 'dist', 'lifers_kali.tar.gz');
     const ps = [
       '$ErrorActionPreference="Stop"',

@@ -4,7 +4,7 @@
 # 环境变量：
 #   LIFERS_BRAIN_ROOT     brain 根目录（默认：本脚本上级目录）
 #   LIFERS_TRAIN_TMUX_SESSION  tmux 会话名，默认 lifers-train
-#   LIFERS_TRAIN_LOG      日志路径，默认 ~/lifers_install.log
+#   LIFERS_TRAIN_LOG      日志路径，默认 ~/lifers/lifers_install.log
 #
 # 用法：
 #   export LIFERS_BRAIN_ROOT=~/lifers/lifers_brain
@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BRAIN="${LIFERS_BRAIN_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 BRAIN="$(cd "$BRAIN" && pwd)"
 SESSION="${LIFERS_TRAIN_TMUX_SESSION:-lifers-train}"
-LOG="${LIFERS_TRAIN_LOG:-$HOME/lifers_install.log}"
+LOG="${LIFERS_TRAIN_LOG:-$HOME/lifers/lifers_install.log}"
 export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 
 if [[ ! -f "$BRAIN/scripts/kali_train_weights.sh" ]]; then

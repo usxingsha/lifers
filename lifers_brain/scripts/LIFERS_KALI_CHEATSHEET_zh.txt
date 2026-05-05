@@ -11,10 +11,11 @@ Lifers Kali — 一页速查（跟着跑）
   只解压合并、暂不起 tmux：**-SkipBootstrap**（默认会先 SSH pause 训练）。不要 pause：**-SkipPauseTrainFirst**。
   weights/.train_status.json 只有 **新版训练在跑/跑过** 才会生成；旧目录或训练未写入前 cat 会报「没有那个文件」。
   zsh 报 corrupt history：mv ~/.zsh_history ~/.zsh_history.bad; touch ~/.zsh_history
+  若旧日志还在家目录根（~/lifers_full_stack.log 等）：bash scripts/kali_normalize_lifers_layout.sh 收拢到 ~/lifers/
 
 【现在就该会的】
   tmux attach -t lifers-stack          看训练画面
-  tail -f ~/lifers_full_stack.log     看循环日志（kali 用户下 ~ 即 /home/kali）
+  tail -f ~/lifers/lifers_full_stack.log   看循环日志（与 ~/lifers 仓库根同层）
   cd /home/kali/lifers/lifers_brain    # 推荐写绝对路径，避免 root/su 搞错 ~
   python3 scripts/show_train_progress.py   # ramp/SGD 百分比：weights/.train_status.json
   # Windows 本机一键看 Kali：lifers_brain\scripts\kali_train_status.ps1

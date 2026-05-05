@@ -155,8 +155,8 @@
         },
         "lifers.kaliScpDestination": {
           "type": "string",
-          "default": "kali@192.168.234.152:/home/kali/lifers_kali.tar.gz",
-          "description": "「本机打包+scp」时 scp 目标（Windows 上 dist/lifers_kali.tar.gz）。"
+          "default": "kali@192.168.234.152:/tmp/lifers_kali_incoming.tar.gz",
+          "description": "「本机打包+scp」时 scp 目标（本机 lifers_brain/dist/lifers_kali.tar.gz）；建议 /tmp 下临时名，避免落在 ~/lifers 根里。"
         },
         "lifers.windowsPackScpCommand": {
           "type": "string",

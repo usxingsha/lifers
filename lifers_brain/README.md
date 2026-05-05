@@ -26,7 +26,7 @@ Python 包名 **`lifers_brain`**；便携仓库根目录历史上曾名 **`rs`**
 **布局（v0.4.5+）**：**Agents Chat** 在**中间编辑器**；**会话建立**（会话树）在**左侧活动栏 → Lifers** 下，与 **Agents** 启动器同栏（不再依赖 Secondary Side Bar）。命令：**Lifers: 打开 Agents Chat**、**Lifers: 显示会话建立**。**上下文**：**Lifers: 添加上下文文件**、**Lifers: 添加目录为上下文**（递归收集文件路径，受设置 `lifers.*` 限制）。
 
 **Kali 训练权重**：`scripts/package_rs_for_kali.ps1` → `dist/lifers_kali.tar.gz`；在 Kali 上解压后跑 **`scripts/kali_install_full_train.sh`**（默认 `full` + 名义 **`LIFERS_TARGET_PARAM_B=20`** 的渐进放大，遇 **OOM** 停止；产物 **`weights/lifers_*.json`**）。详见 **`scripts/KALI_WEIGHTS.md`**。  
-**一键推代码到 Kali 并开长期 escalate 循环**：`powershell -File scripts\push_brain_and_loop_kali.ps1`（tmux **`lifers-stack`**，日志 **`~/lifers_full_stack.log`**；tar **不含** `weights/`，不冲掉 Kali 已有大权重）。Kali 上一页命令表：**`scripts/LIFERS_KALI_CHEATSHEET_zh.txt`**（可 `scp` 到 `~/` 常看）。
+**一键推代码到 Kali 并开长期 escalate 循环**：`powershell -File scripts\push_brain_and_loop_kali.ps1`（tmux **`lifers-stack`**，日志 **`~/lifers/lifers_full_stack.log`**；tar **不含** `weights/`，不冲掉 Kali 已有大权重）。Kali 上一页命令表：**`scripts/LIFERS_KALI_CHEATSHEET_zh.txt`**（可 `scp` 到 `~/` 常看）。
 
 ### 随跑随用 · 每段 B 暂停同步 · 能力队列（不设「产品挡位」上限）
 

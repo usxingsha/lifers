@@ -24,7 +24,7 @@
 - **`weights/.train_control`** 设为 **`run`**
 - 在 **tmux 会话 `lifers-stack`** 里跑 **`kali_train_escalate_loop.sh`**（`LIFERS_ESCALATE_UNLIMITED=1`、`LIFERS_RAMP_MAX_ITERS=999999`，断 SSH 仍继续）
 
-Kali 上查看：`tmux attach -t lifers-stack`，日志：`tail -f ~/lifers_full_stack.log`。仅解压不启动：`.\push_brain_and_loop_kali.ps1 -SkipBootstrap`。
+Kali 上查看：`tmux attach -t lifers-stack`，日志：`tail -f ~/lifers/lifers_full_stack.log`。仅解压不启动：`.\push_brain_and_loop_kali.ps1 -SkipBootstrap`。
 
 若 tmux 会话已存在，引导脚本**不会**重复新建，避免顶掉正在跑的任务；需先 `tmux kill-session -t lifers-stack` 或换 `LIFERS_TRAIN_TMUX_SESSION`。
 
@@ -102,7 +102,7 @@ Kali 本机一页版（随仓库同步）：**`scripts/LIFERS_KALI_CHEATSHEET_zh
 | 目的 | 命令 |
 |------|------|
 | 看训练 | `tmux attach -t lifers-stack` |
-| 看日志 | `tail -f ~/lifers_full_stack.log` |
+| 看日志 | `tail -f ~/lifers/lifers_full_stack.log` |
 | 暂停 / 继续 / 停 | `cd ~/lifers/lifers_brain` → `bash scripts/lifers_train_ctl.sh` + 参数 `pause` / `run` / `stop` |
 | Windows 推代码并带跑循环 | `powershell -File scripts\push_brain_and_loop_kali.ps1` |
 | 停旧 tmux、备份主权重、合并 checkpoint（若有） | `bash scripts/remote_stop_old_merge_weights.sh` |

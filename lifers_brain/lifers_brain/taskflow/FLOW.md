@@ -63,7 +63,7 @@ flowchart LR
 
 | TaskKind | 处理模块 | 执行方式 |
 |----------|-----------|----------|
-| `CHAT_QUICK` | `handlers/chat_quick.py` | `quick_chat(user_text)` |
+| `CHAT_QUICK` | `handlers/chat_quick.py` | `quick_chat(user_text)`（默认不写 taskflow 记忆、不跑 steward，避免 Bridge 被 SQLite 管家拖慢；`LIFERS_QUICK_CHAT_LEARN=1` 可恢复） |
 | `PLAN_PREVIEW` | `handlers/plan_preview.py` | `step` |
 | `SMART_SEARCH` | `handlers/smart_search.py` | `step` |
 | `WORKFLOW_DUAL` | `handlers/workflow_dual.py` | `step` |

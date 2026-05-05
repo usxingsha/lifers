@@ -161,9 +161,11 @@ class LocalBrain:
         self._mw_loaded = w
         return w
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str, max_out_chars: Optional[int] = None) -> str:
         wp = self._weights_path()
         mc = speed_local_lm_max_chars(int(getattr(self.cfg, "local_lm_max_chars", 200) or 200))
+        if max_out_chars is not None:
+            mc = max(32, min(mc, int(max_out_chars)))
         if not wp.exists():
             return "(missing weights) run scripts/run_pipeline.py or sync weights/lifers_transformer.json"
         if self.model == "transformer":
@@ -735,8 +737,13 @@ class LifersAgent:
         inst_list = getattr(self, "_instinct_turn_notes", None) or []
         inst = "\n".join(inst_list[:4]) if inst_list else ""
         sess = self.session.context_text()
-        if len(sess) > 1600:
-            sess = sess[-1600:]
+        try:
+            qctx = int(os.environ.get("LIFERS_QUICK_CHAT_CONTEXT_CHARS", "960").strip() or "960")
+        except ValueError:
+            qctx = 960
+        qctx = max(400, min(qctx, 2400))
+        if len(sess) > qctx:
+            sess = sess[-qctx:]
         zh_hint = (
             "只输出与 USER 话题相关的中文短答（一两句），禁止乱码、禁止大段符号与无意义拉丁串。"
             "若用户提及「刚才、上文、之前说过」，须结合 Recent context 作答，勿敷衍。"
@@ -755,7 +762,12 @@ class LifersAgent:
         lines.append(sess)
         lines.append(f"USER:\n{user_line}\nASSISTANT:\n")
         prompt = "\n\n".join(lines)
-        text = self.brain.generate(prompt).strip()
+        try:
+            qout = int(os.environ.get("LIFERS_QUICK_CHAT_OUT_CHARS", "112").strip() or "112")
+        except ValueError:
+            qout = 112
+        qout = max(48, min(qout, 400))
+        text = self.brain.generate(prompt, max_out_chars=qout).strip()
         if (not text or text.startswith("(missing weights)")) and self._quick_web_enabled():
             return self._web_search_reply(u, u)
         if not text or text.startswith("(missing weights)"):

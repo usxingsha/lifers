@@ -9,11 +9,14 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING
 
+import os
+
 from lifers_brain.taskflow.classify import classify_task, split_user_message
 from lifers_brain.taskflow.context import TaskContext
 from lifers_brain.taskflow.handlers import build_default_dispatcher
 from lifers_brain.steward import steward_after_learn
 from lifers_brain.taskflow.learn import learn_from_turn
+from lifers_brain.taskflow.kinds import TaskKind
 
 if TYPE_CHECKING:
     from lifers_brain.agent import LifersAgent
@@ -26,6 +29,12 @@ def run_lifers_turn(agent: LifersAgent, agent_input: str) -> str:
     ctx = TaskContext(agent=agent, agent_input=agent_input, user_text=user_text, kind=kind)
     dispatcher = build_default_dispatcher()
     res = dispatcher.dispatch(kind, ctx)
-    learn_from_turn(agent, ctx, res)
-    steward_after_learn(agent)
+    # CHAT_QUICK 默认不写 longterm + 不跑 steward，避免 SQLite 膨胀后 count/prune 拖垮 Bridge（秒回路径）。
+    if kind == TaskKind.CHAT_QUICK:
+        if os.environ.get("LIFERS_QUICK_CHAT_LEARN", "0").strip().lower() in ("1", "true", "yes", "on"):
+            learn_from_turn(agent, ctx, res)
+            steward_after_learn(agent)
+    else:
+        learn_from_turn(agent, ctx, res)
+        steward_after_learn(agent)
     return res.reply

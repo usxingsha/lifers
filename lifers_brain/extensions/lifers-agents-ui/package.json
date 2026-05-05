@@ -2,7 +2,7 @@
   "name": "lifers-agents-ui",
   "displayName": "Lifers Agents Window",
   "description": "Lifers：Agents Chat + 会话建立（侧栏/资源管理器/底部总控）+ Kali 算力总控",
-  "version": "0.5.14",
+  "version": "0.5.15",
   "publisher": "lifers",
   "engines": {
     "vscode": "^1.85.0"

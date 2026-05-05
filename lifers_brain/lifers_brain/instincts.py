@@ -7,10 +7,11 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .memory import MemoryItem
 
@@ -49,13 +50,27 @@ def save_instinct_state(root: Path, st: InstinctState) -> None:
 
 def instinct_cfg(stack: Dict[str, Any]) -> Dict[str, Any]:
     d = stack.get("instincts") or {}
+    raw_micro = os.environ.get("LIFERS_MICRO_THINK_EVERY", "").strip()
+    env_micro: Optional[int] = None
+    if raw_micro:
+        try:
+            env_micro = max(0, int(raw_micro))
+        except ValueError:
+            env_micro = None
+    stack_micro = d.get("micro_think_every_user_turns")
+    if env_micro is not None:
+        micro_n = env_micro
+    elif stack_micro is not None:
+        micro_n = int(stack_micro)
+    else:
+        micro_n = 6
     return {
         "enabled": bool(d.get("enabled", True)),
         "sleep_after_idle_sec": float(d.get("sleep_after_idle_sec", 3600)),
         "think_after_idle_sec": float(d.get("think_after_idle_sec", 420)),
         "idle_chat_soft_sec": float(d.get("idle_chat_soft_sec", 180)),
         "presence_reset_idle_sec": float(d.get("presence_reset_idle_sec", 120)),
-        "micro_think_every_user_turns": int(d.get("micro_think_every_user_turns", 6)),
+        "micro_think_every_user_turns": micro_n,
         "operations_trim_scratchpad": bool(d.get("operations_trim_scratchpad", True)),
         "operations_max_scratch_items": int(d.get("operations_max_scratch_items", 24)),
         "sleep_consolidate_to_longterm": bool(d.get("sleep_consolidate_to_longterm", True)),

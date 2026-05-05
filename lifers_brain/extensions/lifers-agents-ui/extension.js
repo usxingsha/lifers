@@ -1525,6 +1525,9 @@ ${bodyInner}
             MODEL: 'lifers',
             LIFERS_FORCE_LOCAL_ONLY: '1',
             LIFERS_CONTEXT_MAX_FILES: String(bridgeMax),
+            LIFERS_QUICK_CHAT_LEARN: '0',
+            LIFERS_MICRO_THINK_EVERY: '999',
+            LIFERS_MAX_SPEED: '1',
             ...(httpDirect ? { LIFERS_HTTP_DIRECT: '1' } : {}),
           },
         });

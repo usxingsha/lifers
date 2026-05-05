@@ -54,6 +54,8 @@
     "lifers.sandbox": false,
     "lifers.httpDirect": true,
     "lifers.remoteChat": false,
+    "lifers.gateAutoStart": true,
+    "lifers.gatePort": 55555,
     "lifers.openChatOnStartup": true,
     "lifers.openSessionSidebarOnStartup": true,
     "lifers.autoCreateSessionOnStart": true,

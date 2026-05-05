@@ -6,6 +6,8 @@ Lifers Kali — 一页速查（跟着跑）
   tail -f ~/lifers_full_stack.log     看循环日志
   cd ~/lifers/lifers_brain
   python3 scripts/show_train_progress.py   # ramp/SGD 百分比：weights/.train_status.json
+  # Windows 本机一键看 Kali：lifers_brain\scripts\kali_train_status.ps1
+  # VSCodium「LIFERS 总控」打开后会 SSH 轮询同一份 .train_status.json（需 lifers.kaliSshPrefix 等已配置）
   bash scripts/lifers_train_ctl.sh pause   暂停（档位边界更安全）
   bash scripts/lifers_train_ctl.sh run     继续
   bash scripts/lifers_train_ctl.sh stop    停训（需再 run 才会进 escalate）

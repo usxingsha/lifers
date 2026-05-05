@@ -22,6 +22,10 @@
 # 会话侧本地状态
 /lifers_brain/.lifers/
 
+# 运行期日志与本地记忆库（勿入库）
+/lifers_brain/logs/
+/lifers_brain/memory/*.sqlite3
+
 # 本地 data/（Cursor 状态、扩展缓存、用户数据等）不进入版本库
 /data/
 

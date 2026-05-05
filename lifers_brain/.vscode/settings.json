@@ -3,7 +3,7 @@
   "lifers.pythonPath": "python",
   "lifers.model": "transformer",
   "lifers.sandbox": false,
-  "lifers.remoteChat": true,
+  "lifers.remoteChat": false,
   "lifers.httpDirect": true,
   "lifers.chatApiKeyEnv": "NVIDIA_API_KEY",
   "lifers.bridgeTimeoutMs": 600000,

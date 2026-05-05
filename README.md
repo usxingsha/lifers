@@ -24,6 +24,8 @@ git submodule update --init --depth 1
 
 不在此仓库进程内安装或启动 OpenClaw / claw-code 网关；云 API 不入 `stack.brain`。
 
+**源码并入说明**：`third_party/openclaw`（git 子模块）与 `third_party/claw_code_rust`（Kali 并入）均在仓库内，用于对照与审计；Python 智脑 **不会** 自动调用其中的 npm/Rust 网关。对话默认 **本地**（`stack.json` → `remote_infer.enabled=false`，扩展 `lifers.remoteChat=false`），无需 NVIDIA 密钥即可聊天；需要云端大模型时再开启并配置环境变量密钥。
+
 ## 文档入口
 
 - 日常运维 AI：`lifers_brain/config/lifers_ai_playbook_zh.md`（由 `stack.json` → `llm_ops` 注入）

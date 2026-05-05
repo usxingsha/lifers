@@ -54,7 +54,7 @@ _DEFAULT_STACK_KEYS: Dict[str, Any] = {
 # 启动时若 stack 缺顶层节，则补全（不覆盖已有节）。
 _DEFAULT_STACK_TOP: Dict[str, Any] = {
     "remote_infer": {
-        "enabled": True,
+        "enabled": False,
         "provider": "nvidia_integrate",
         "chat_url": "https://integrate.api.nvidia.com/v1/chat/completions",
         "model": "meta/llama-3.1-8b-instruct",

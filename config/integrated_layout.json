@@ -62,6 +62,7 @@
     "lifers.model": "lifers",
     "lifers.sandbox": false,
     "lifers.httpDirect": true,
+    "lifers.remoteChat": false,
     "lifers.openChatOnStartup": true,
     "lifers.openSessionSidebarOnStartup": true,
     "lifers.autoCreateSessionOnStart": true,

@@ -621,10 +621,11 @@ class LifersAgent:
 
         key = resolve_api_key()
         if not key:
-            return (
-                "已启用远程推理，但未检测到 API 密钥。请在本机设置环境变量 **NVIDIA_API_KEY**（或 **LIFERS_CHAT_API_KEY**），"
-                "并**完全重启**编辑器使 Bridge 子进程继承；切勿把密钥写入仓库或 chat。"
+            sys.stderr.write(
+                "LIFERS_PROGRESS quick_chat remote_infer skipped: no API key; falling back to local brain.\n"
             )
+            sys.stderr.flush()
+            return None
         url = (os.environ.get("LIFERS_CHAT_URL") or "https://integrate.api.nvidia.com/v1/chat/completions").strip()
         model = (os.environ.get("LIFERS_CHAT_MODEL") or "meta/llama-3.1-8b-instruct").strip()
         try:
@@ -690,7 +691,10 @@ class LifersAgent:
         sess = self.session.context_text()
         if len(sess) > 1600:
             sess = sess[-1600:]
-        zh_hint = "只输出与 USER 话题相关的中文短答（一两句），禁止乱码、禁止大段符号与无意义拉丁串。"
+        zh_hint = (
+            "只输出与 USER 话题相关的中文短答（一两句），禁止乱码、禁止大段符号与无意义拉丁串。"
+            "若用户提及「刚才、上文、之前说过」，须结合 Recent context 作答，勿敷衍。"
+        )
         if self.brain.model == "markov":
             zh_hint += "（当前为字符级 markov，务必简短、纯中文。）"
         lines = [

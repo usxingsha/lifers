@@ -80,11 +80,11 @@
 - **`LIFERS_MAX_SPEED=1`**：减少大权重复核 JSON 的写盘频率、缩短 pause 轮询等（见 `lifers_brain/speed_env.py`）
 - **`LIFERS_TRAIN_SAVE_EVERY=N`**：每 N 步写一次权重（崩溃时可能多丢几步）
 
-### 9.4 远程大模型（NVIDIA Integrate，无 Ollama）
+### 9.4 本地对话（默认）与远程大模型（可选）
 
-- **`stack.remote_infer`** + 环境变量 **`NVIDIA_API_KEY`**（勿写入仓库）
-- Bridge 侧 **`LIFERS_REMOTE_CHAT=1`**；仅云端、不要本地回退：`LIFERS_LOCAL_FALLBACK=0`
-- 代理不通：**`LIFERS_HTTP_DIRECT=1`** 或编辑器 **`lifers.httpDirect`: true**
+- **默认无需 API**：`stack.remote_infer.enabled=false`，扩展 **`lifers.remoteChat=false`**，Agents Chat 走 **本地 TinyTransformer/Markov + 会话记忆**，不要求 **`NVIDIA_API_KEY`**。
+- **需要 NVIDIA Integrate 等云端时**：`stack.remote_infer.enabled=true` + 环境变量密钥 + **完全重启编辑器**；或仅开 **`lifers.remoteChat=true`** 并配置密钥。密钥勿写入仓库。
+- 仅云端、不要本地回退：**`LIFERS_LOCAL_FALLBACK=0`**。代理不通：**`LIFERS_HTTP_DIRECT=1`** 或 **`lifers.httpDirect`: true**
 
 ### 9.5 自修复配置（stack）
 
@@ -107,16 +107,16 @@
 ## 10. OpenClaw 上游对照（清单镜像，非运行时）
 
 - **本仓库不安装、不调用** OpenClaw 二进制或 npm 网关；仅 **`stack.openclaw.compat_ref`**（锚点）与 **`config/openclaw_manifest.json`**（分项对照）把上游能力域写给 SYSTEM，避免与 Lifers 的真实职责混淆。
-- **合并联接声明**：`rs/config/integrated_layout.json` 含 **openclaw.mode = upstream_tracking_only**；约束 **`openclaw_reference_only_no_runtime_dependency`**。
+- **合并联接声明**：`config/integrated_layout.json` 含 **openclaw.mode = upstream_tracking_only**；约束 **`openclaw_reference_only_no_runtime_dependency`**。
 - **对齐上游发行**：在有外网的环境运行 **`python scripts/sync_openclaw_release.py`**（写入最新 **`compat_ref`** 与 manifest 的 **`last_synced_tag`**）。代理误伤 GitHub（WinError 10061）时与同 playbook §1：**`LIFERS_HTTP_DIRECT=1`** 后再运行。
 - **漂移检测**：**`python scripts/lifers_verify_config.py`**；或在进程环境里 **`LIFERS_CHECK_OPENCLAW=1`**，校验远端 release 与锚点是否一致（不一致会得到告警文案）。
 - **边界复述**：网关/频道/托管模型/OpenClaw Skills **不属于**本 Python 进程；云 API **仅限** `remote_infer` + 环境变量密钥；本地权重与 **`lifers_brain.tools`** 才是本仓库实现面。
 - **OpenClaw 上游源码**：推荐 **`git submodule update --init --depth 1`**（仓库根含 **`.gitmodules`**）。或在便携根（目录 **`lifers`**）执行 **`scripts/vendor_openclaw_reference.ps1`** / **`lifers_brain/scripts/vendor_openclaw_reference.sh`**（会优先子模块再浅克隆）。对照 **`openclaw_manifest.json`** 与 **`config/openclaw_upstream_vendor.json`**，不跑 `npm` 构建。
-- **claw-code/rust（Rust workspace）并入**：完整源码在 **`rs/third_party/claw_code_rust`**（来自 Kali **`~/claw-code/rust`**，排除 `target` 与会话缓存）；清单 **`config/claw_code_rust_vendor.json`**，审计说明 **`third_party/claw_code_rust/LIFERS_MERGE.md`**。内含 **`crates/api`** 等仅为 **vendor 对照**，**不在 Lifers Python 进程内**启用其网关或把云 API 写入 **`stack.brain`**（与 §10 第一条一致）。**`package_rs_for_kali.ps1`** 仅打包 **`lifers_brain/`**，若 Kali 也需同目录请另行 **`scp`/`rsync`** 整个 **`rs/third_party/claw_code_rust`**。
+- **claw-code/rust（Rust workspace）并入**：完整源码在便携根 **`third_party/claw_code_rust`**（来自 Kali **`~/claw-code/rust`**，排除 `target` 与会话缓存）；清单 **`config/claw_code_rust_vendor.json`**，审计说明 **`third_party/claw_code_rust/LIFERS_MERGE.md`**。内含 **`crates/api`** 等仅为 **vendor 对照**，**不在 Lifers Python 进程内**启用其网关或把云 API 写入 **`stack.brain`**（与 §10 第一条一致）。**`package_rs_for_kali.ps1`** 仅打包 **`lifers_brain/`**，若 Kali 也需同目录请 **`scp`/`rsync`** **`third_party/claw_code_rust`**。
 
 ## 11. 工作区 `rs0` 与自定义多根
 
-- **默认**：`rs/config/integrated_layout.json` 多根 **第一项** 为 **`./rs0`**（与 `rs` 全树、`./lifers_brain` 并列），供日常可写文件、小实验、非仓库核心内容。
+- **默认**：`config/integrated_layout.json` 多根 **第一项** 为 **`./rs0`**（与便携根全树、`./lifers_brain` 并列），供日常可写文件、小实验、非仓库核心内容。
 - **完全自定义**：复制 **`config/workspace_custom.example.json` → `config/workspace_custom.json`**（后者勿提交），修改 **`folders`** 数组；**非空** 时**覆盖** layout 的 roots。可改 `rs0` 路径或改名、增删根。
 - **物化**：在便携根执行 **`python tools/materialize_integrated_workspace.py`** 更新 **`lifers.code-workspace`**（并写 **`rs.code-workspace`** 兼容副本）后重载编辑器窗口。
 

@@ -4,7 +4,7 @@
   "lifers.model": "lifers",
   "lifers.sandbox": false,
   "lifers.httpDirect": true,
-  "lifers.remoteChat": true,
+  "lifers.remoteChat": false,
   "lifers.chatApiUrl": "https://integrate.api.nvidia.com/v1/chat/completions",
   "lifers.chatModel": "meta/llama-3.1-8b-instruct",
   "lifers.chatApiKeyEnv": "NVIDIA_API_KEY",

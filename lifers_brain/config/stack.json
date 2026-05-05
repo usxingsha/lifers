@@ -4,14 +4,14 @@
     "role_brain": "智脑：MODEL（lifers|markov|transformer）/SANDBOX/weights/memory_db/session/tool 上限",
     "role_human_sim": "仿真人：persona_name + system_prompt_extra + local_lm_max_chars",
     "role_robot": "机器人：SIM_EXEC_CMD / ROBOT_SENSE_CMD / ROBOT_ACT_CMD（可由下方 *_exec_cmd 在启动时注入）",
-    "apply_at": "scripts/run_agent.py、agent_bridge_once.py、run_pipeline.py 调用 apply_stack_env；若存在 rs/config/integrated_layout.json 则同时执行 rs 整合引导（物化工作区、可选剪枝）",
+    "apply_at": "scripts/run_agent.py、agent_bridge_once.py、run_pipeline.py 调用 apply_stack_env；若存在 便携根 config/integrated_layout.json 则同时执行整合引导（物化工作区、可选剪枝）",
     "llm_ops": "stack.llm_ops：写入本地 LLM 系统段的日常运维说明；含权重流水线、联网/浏览器约定（daily_ai_playbook_relpath 指向 Markdown），与对话并行。",
     "organ_system": "stack.organ_system：加载 config/organ_capabilities.json（器官-能力-操作-stack/工具）写入 SYSTEM；capabilities_file 可换路径；custom_for_llm 覆盖全文。",
     "physiology_sim": "stack.physiology_sim：后期生理连续动力学预留；enabled=true 时写入 PHYSIOLOGY_SIM_ROADMAP（路线图）。数值仿真与 tick 尚未接入。",
     "runtime_三合一": "同一进程根据 runtime.role / 环境变量判断宿主：电脑=本地智脑(brain)，机器人本体=robot；human_sim 强调人格对话。LIFERS_RUNTIME 优先级最高。",
     "openclaw_merge": "openclaw.enabled=true：仅清单/compat_ref/manifest 对照上游，不安装、不调用 OpenClaw 运行时；use_external_openclaw_runtime 保持 false 则无外部依赖。",
-    "claw_code_rust_vendor": "rs/third_party/claw_code_rust：Kali ~/claw-code/rust 源码并入（见 config/claw_code_rust_vendor.json、LIFERS_MERGE.md）；非 Lifers 运行时；不把其 HTTP/API 接入 stack。",
-    "remote_infer": "stack.remote_infer：NVIDIA Integrate 等 OpenAI 兼容 HTTPS（仅 urllib/json）；密钥只走环境变量。enabled 时注入 LIFERS_REMOTE_CHAT。",
+    "claw_code_rust_vendor": "third_party/claw_code_rust：Kali ~/claw-code/rust 源码并入（见 config/claw_code_rust_vendor.json、LIFERS_MERGE.md）；非 Lifers 运行时；不把其 HTTP/API 接入 stack。",
+    "remote_infer": "stack.remote_infer：可选 NVIDIA Integrate 等 HTTPS；默认关闭（enabled=false），无需 API 即可本地对话。设为 enabled=true 且配置环境变量密钥后注入 LIFERS_REMOTE_CHAT。",
     "lifers_gate": "HTTP 服务 scripts/lifers_gate.py（代号 lifers / 中文：终身监禁者）默认 127.0.0.1:55555；POST /v1/step 与 agent_bridge 同款 JSON。勿对公网绑定 0.0.0.0。",
     "embodied_world": "stack.embodied_world：平面物理步进 + 视觉摘要 + 启发式决策；读同一 weights/.train_control（pause/stop/run）与训练对齐；CLI scripts/embodied_tick_once.py。"
   },
@@ -84,13 +84,13 @@
     "note": "默认与编辑器 lifers.sandbox=false 对齐：真实联网（urllib，尊重系统代理与 HTTPS_PROXY 等）。直连：LIFERS_HTTP_DIRECT=1 或 lifers.httpDirect=true。SANDBOX=1 时 web 类工具多为占位。motion_execute/manipulate 在非沙盒且设置 robot.act_exec_cmd 时使用 ROBOT_ACT_CMD（stdin JSON → stdout JSON）。Lifers 不自动启动浏览器；核验链接请用户在本机 Edge/Chrome 等自行打开。"
   },
   "remote_infer": {
-    "enabled": true,
+    "enabled": false,
     "provider": "nvidia_integrate",
     "chat_url": "https://integrate.api.nvidia.com/v1/chat/completions",
     "model": "meta/llama-3.1-8b-instruct",
     "max_tokens": 1024,
     "api_key_env": "NVIDIA_API_KEY",
-    "note_zh": "仅 stdlib HTTPS 调 OpenAI 兼容接口；api_key 只从环境变量读取（api_key_env），禁止写入仓库。enabled=true 时由 stack_env 注入 LIFERS_REMOTE_CHAT=1。仅远程、不要本地回退时设环境变量 LIFERS_LOCAL_FALLBACK=0。"
+    "note_zh": "默认关闭：无密钥亦可对话（本地 TinyTransformer/Markov + 记忆）。需要 NVIDIA Integrate 等大模型时：enabled=true + 环境变量密钥 + 重启编辑器；或仅开扩展「lifers.remoteChat」+ 密钥。api_key 禁止写入仓库。不要本地回退时设 LIFERS_LOCAL_FALLBACK=0。"
   },
   "llm_ops": {
     "enabled": true,

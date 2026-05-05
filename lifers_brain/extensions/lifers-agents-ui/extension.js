@@ -1292,7 +1292,7 @@ ${bodyInner}
     const model = conf.get('model') || 'lifers';
     const sandbox = conf.get('sandbox') !== false;
     const httpDirect = conf.get('httpDirect') !== false;
-    const remoteChat = conf.get('remoteChat') !== false;
+    const remoteChat = conf.get('remoteChat') === true;
     const chatApiUrl = String(conf.get('chatApiUrl') || 'https://integrate.api.nvidia.com/v1/chat/completions').trim();
     const chatModel = String(conf.get('chatModel') || 'meta/llama-3.1-8b-instruct').trim();
     const chatApiKeyEnv = String(conf.get('chatApiKeyEnv') || 'NVIDIA_API_KEY').trim();

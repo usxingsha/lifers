@@ -2,7 +2,7 @@
   "name": "lifers-agents-ui",
   "displayName": "Lifers Agents Window",
   "description": "Lifers：Agents Chat + 会话建立（侧栏/资源管理器/底部总控）+ Kali 算力总控",
-  "version": "0.5.8",
+  "version": "0.5.9",
   "publisher": "lifers",
   "engines": {
     "vscode": "^1.85.0"
@@ -48,8 +48,8 @@
         },
         "lifers.remoteChat": {
           "type": "boolean",
-          "default": true,
-          "description": "为 Bridge 打开 LIFERS_REMOTE_CHAT；与 config/stack.json#remote_infer 一致，走 OpenAI 兼容 HTTPS（仅标准库）。密钥来自 NVIDIA_API_KEY 等环境变量，勿写入仓库。"
+          "default": false,
+          "description": "true 时 Bridge 注入 LIFERS_REMOTE_CHAT（需环境变量 API 密钥）。默认 false：仅用本地模型对话，无需 NVIDIA/OpenAI 密钥。"
         },
         "lifers.chatApiUrl": {
           "type": "string",

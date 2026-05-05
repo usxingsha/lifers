@@ -25,6 +25,8 @@ Lifers Kali — 一页速查（跟着跑）
 【现在就该会的】
   tmux attach -t lifers-stack          看训练画面
   tail -f ~/lifers/lifers_full_stack.log   看循环日志（与 ~/lifers 仓库根同层）
+  若 tail 报「没有那个文件」：先 cd lifers_brain 再 bash scripts/remote_kali_bootstrap_train_loop.sh（会 touch 日志）；或 bash scripts/kali_normalize_lifers_layout.sh 收拢桌面误放的 lifers_full_stack*.log
+  勿在 Linux 工作区创建名为 nul 的文件（Windows 保留名）；若已有：rm -f nul 或删掉 ~/S1/nul
   cd /home/kali/lifers/lifers_brain    # 推荐写绝对路径，避免 root/su 搞错 ~
   python3 scripts/show_train_progress.py   # ramp/SGD 百分比：weights/.train_status.json
   # Windows 本机一键看 Kali：lifers_brain\scripts\kali_train_status.ps1

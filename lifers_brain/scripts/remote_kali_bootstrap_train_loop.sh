@@ -59,6 +59,8 @@ echo "[lifers-bootstrap] control=run -> $BR/weights/.train_control"
 SESSION="${LIFERS_TRAIN_TMUX_SESSION:-lifers-stack}"
 LOG="${LIFERS_TRAIN_LOG:-$HOME/lifers/lifers_full_stack.log}"
 mkdir -p "$(dirname "$LOG")" 2>/dev/null || true
+# 保证 tail -f 总有目标；旧会话若从未 tee 到该路径，此处先建空文件后续仍会追加
+touch "$LOG" 2>/dev/null || true
 
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/lifers"
 mkdir -p "$CACHE"
@@ -111,6 +113,7 @@ if _ensure_tmux; then
       _alive=1
     fi
     if [[ "$_alive" -eq 1 ]]; then
+      touch "$LOG" 2>/dev/null || true
       echo "[lifers-bootstrap] tmux 会话已存在且训练进程在跑: $SESSION"
       echo "  接入: tmux attach -t $SESSION"
       echo "  日志: tail -f $LOG"

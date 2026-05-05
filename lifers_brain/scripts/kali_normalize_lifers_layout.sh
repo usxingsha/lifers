@@ -34,6 +34,20 @@ if [[ -d "$CLAW_SRC" ]]; then
   fi
 fi
 
+# 桌面或下载里误放的循环日志 → 收拢到仓库根（便于 tail -f 固定路径）
+for guess in "$HOME/Desktop" "$HOME/桌面" "$HOME/Downloads" "$HOME/下载"; do
+  if [[ ! -d "$guess" ]]; then
+    continue
+  fi
+  while IFS= read -r -d '' f; do
+    dest="$ROOT/lifers_full_stack.log"
+    echo "[lifers-layout] merge stray log $f -> $dest"
+    mkdir -p "$ROOT"
+    { echo ""; echo "=== merged from $f $(date -Iseconds) ==="; cat "$f"; } >>"$dest"
+    rm -v "$f"
+  done < <(find "$guess" -maxdepth 1 -type f \( -name 'lifers_full_stack.log' -o -name 'lifers_full_stack*.log' \) -print0 2>/dev/null || true)
+done
+
 echo "[lifers-layout] done. ROOT=$ROOT"
 if [[ -f "$CLAW_DST/rust/Cargo.toml" ]]; then
   echo "[lifers-layout] claw rust at: $CLAW_DST/rust"

@@ -4,6 +4,8 @@
   "lifers.model": "transformer",
   "lifers.sandbox": false,
   "lifers.remoteChat": false,
+  "lifers.gateAutoStart": true,
+  "lifers.gatePort": 55555,
   "lifers.httpDirect": true,
   "lifers.chatApiKeyEnv": "NVIDIA_API_KEY",
   "lifers.bridgeTimeoutMs": 600000,

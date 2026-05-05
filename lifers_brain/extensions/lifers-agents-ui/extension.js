@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const cp = require('child_process');
 const crypto = require('crypto');
+const http = require('http');
 const { LifersSessionTreeProvider } = require('./session_tree.js');
 
 /**
@@ -102,6 +103,16 @@ function activate(context) {
       controller.bootstrapDefaultSessionIfNeeded(r);
     }
   }, 900);
+
+  setTimeout(() => {
+    const c2 = vscode.workspace.getConfiguration('lifers');
+    if (c2.get('gateAutoStart') === false) return;
+    const port = Math.max(1024, Math.min(65535, Number(c2.get('gatePort')) || 55555));
+    const root = getBrainRoot();
+    if (!root) return;
+    const py = resolveLifersPythonExecutable(c2.get('pythonPath'), root);
+    maybeStartLifersGate(root, py, port);
+  }, 1400);
 
 }
 
@@ -226,6 +237,46 @@ function resolveLifersPythonExecutable(confPython, brainRoot) {
   }
 
   return py;
+}
+
+/**
+ * @param {number} port
+ * @param {(up: boolean) => void} cb
+ */
+function gateHealthOk(port, cb) {
+  const req = http.get({ hostname: '127.0.0.1', port, path: '/health', timeout: 900 }, (res) => {
+    cb(res.statusCode === 200);
+  });
+  req.on('error', () => cb(false));
+  req.on('timeout', () => {
+    req.destroy();
+    cb(false);
+  });
+}
+
+/**
+ * Background HTTP gate for tools/automation (lifers_gate.py). Idempotent if already listening.
+ * @param {string} brainRoot
+ * @param {string} py
+ * @param {number} port
+ */
+function maybeStartLifersGate(brainRoot, py, port) {
+  const script = path.join(brainRoot, 'scripts', 'lifers_gate.py');
+  if (!fs.existsSync(script)) return;
+  gateHealthOk(port, (up) => {
+    if (up) return;
+    try {
+      const proc = cp.spawn(py, ['-u', script, '--host', '127.0.0.1', '--port', String(port)], {
+        cwd: brainRoot,
+        detached: true,
+        stdio: 'ignore',
+        env: { ...process.env, PYTHONUTF8: '1', LIFERS_ROOT: brainRoot },
+      });
+      proc.unref();
+    } catch {
+      /* ignore */
+    }
+  });
 }
 
 function getBrainRoot() {
@@ -1257,9 +1308,9 @@ ${bodyInner}
           </div>
           <div class="toolbar-right">
             <span id="send-spinner" class="send-spinner hidden" role="status" aria-label="Sending"></span>
-            <button type="button" class="icon-btn" id="btn-attach-file" title="添加文件到上下文">📄</button>
-            <button type="button" class="icon-btn" id="btn-attach-folder" title="添加目录到上下文（递归采集）">📁</button>
-            <button type="button" class="icon-btn icon-btn--disabled" id="btn-voice" disabled title="语音输入（未接入）">🎤</button>
+            <button type="button" class="icon-btn icon-btn--brand" id="btn-attach-file" title="添加文件到上下文"><img class="icon-btn-img" src="${iconUri}" width="18" height="18" alt="" /></button>
+            <button type="button" class="icon-btn icon-btn--brand" id="btn-attach-folder" title="添加目录到上下文（递归采集）"><img class="icon-btn-img" src="${iconUri}" width="18" height="18" alt="" /></button>
+            <button type="button" class="icon-btn icon-btn--disabled icon-btn--brand" id="btn-voice" disabled title="语音输入（未接入）"><img class="icon-btn-img icon-btn-img--muted" src="${iconUri}" width="18" height="18" alt="" /></button>
             <button type="button" class="aw-send" id="btn-send" title="发送">
               <img class="aw-send-icon" src="${iconUri}" width="18" height="18" alt="" />
             </button>

@@ -441,6 +441,16 @@ body {
   cursor: not-allowed;
 }
 
+.icon-btn-img {
+  display: block;
+  margin: 0 auto;
+  opacity: 0.92;
+}
+
+.icon-btn-img--muted {
+  opacity: 0.4;
+}
+
 .send-spinner {
   width: 16px;
   height: 16px;

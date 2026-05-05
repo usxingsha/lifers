@@ -2,7 +2,7 @@
   "name": "lifers-agents-ui",
   "displayName": "Lifers Agents Window",
   "description": "Lifers：Agents Chat + 会话建立（侧栏/资源管理器/底部总控）+ Kali 算力总控",
-  "version": "0.5.9",
+  "version": "0.5.10",
   "publisher": "lifers",
   "engines": {
     "vscode": "^1.85.0"
@@ -49,7 +49,7 @@
         "lifers.remoteChat": {
           "type": "boolean",
           "default": false,
-          "description": "true 时 Bridge 注入 LIFERS_REMOTE_CHAT（需环境变量 API 密钥）。默认 false：仅用本地模型对话，无需 NVIDIA/OpenAI 密钥。"
+          "description": "true 时 Bridge 注入 LIFERS_REMOTE_CHAT（需密钥）。默认 false：仅用本地/Kali 权重。若用 stack.remote_infer，还须环境变量 LIFERS_ALLOW_REMOTE_INFER=1。"
         },
         "lifers.chatApiUrl": {
           "type": "string",
@@ -162,6 +162,18 @@
           "type": "string",
           "default": "",
           "description": "若非空：总控「本机打包+scp」改为执行整条命令（工作区 cwd）；空则运行 scripts/package_rs_for_kali.ps1 + scp。"
+        },
+        "lifers.gateAutoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "激活扩展后后台启动 scripts/lifers_gate.py（127.0.0.1，端口见 gatePort）；已在监听则跳过。"
+        },
+        "lifers.gatePort": {
+          "type": "number",
+          "default": 55555,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "lifers_gate HTTP 端口（与 Python 默认一致）。"
         }
       }
     },

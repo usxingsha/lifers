@@ -97,7 +97,10 @@ def apply_stack_env(root: Path) -> Dict[str, Any]:
     os.environ.setdefault("LIFERS_RUNTIME", resolved)
 
     ri = data.get("remote_infer") or {}
-    if isinstance(ri, dict) and ri.get("enabled"):
+    # Cloud chat/completions is opt-in via OS env LIFERS_ALLOW_REMOTE_INFER=1 even if stack.remote_infer.enabled=true.
+    # Default: local/Kali-trained weights only (no NVIDIA/OpenAI key required).
+    allow_remote = os.environ.get("LIFERS_ALLOW_REMOTE_INFER", "").strip().lower() in ("1", "true", "yes", "on")
+    if isinstance(ri, dict) and ri.get("enabled") and allow_remote:
         os.environ.setdefault("LIFERS_REMOTE_CHAT", "1")
         cu = str(ri.get("chat_url") or "").strip()
         if cu:

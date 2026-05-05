@@ -88,7 +88,7 @@
 ### 9.4 本地对话（默认）与远程大模型（可选）
 
 - **默认无需 API**：`stack.remote_infer.enabled=false`，扩展 **`lifers.remoteChat=false`**，Agents Chat 走 **本地 Lifers 权重（`weights/lifers_transformer.json`）/ Markov + 会话记忆**，不要求 **`NVIDIA_API_KEY`**。
-- **需要 NVIDIA Integrate 等云端时**：`stack.remote_infer.enabled=true` + 环境变量密钥 + **完全重启编辑器**；或仅开 **`lifers.remoteChat=true`** 并配置密钥。密钥勿写入仓库。
+- **需要 NVIDIA Integrate 等云端时**：`stack.remote_infer.enabled=true` + **`LIFERS_ALLOW_REMOTE_INFER=1`**（本机环境）+ 密钥 + **完全重启编辑器**；或仅开 **`lifers.remoteChat=true`** 并配置密钥。密钥勿写入仓库。
 - 仅云端、不要本地回退：**`LIFERS_LOCAL_FALLBACK=0`**。代理不通：**`LIFERS_HTTP_DIRECT=1`** 或 **`lifers.httpDirect`: true**
 
 ### 9.5 自修复配置（stack）

@@ -11,7 +11,7 @@
     "runtime_三合一": "同一进程根据 runtime.role / 环境变量判断宿主：电脑=本地智脑(brain)，机器人本体=robot；human_sim 强调人格对话。LIFERS_RUNTIME 优先级最高。",
     "openclaw_merge": "openclaw.enabled=true：仅清单/compat_ref/manifest 对照上游，不安装、不调用 OpenClaw 运行时；use_external_openclaw_runtime 保持 false 则无外部依赖。",
     "claw_code_rust_vendor": "third_party/claw_code_rust：Kali ~/claw-code/rust 源码并入（见 config/claw_code_rust_vendor.json、LIFERS_MERGE.md）；非 Lifers 运行时；不把其 HTTP/API 接入 stack。",
-    "remote_infer": "stack.remote_infer：可选 NVIDIA Integrate 等 HTTPS；默认关闭（enabled=false），无需 API 即可本地对话。设为 enabled=true 且配置环境变量密钥后注入 LIFERS_REMOTE_CHAT。",
+    "remote_infer": "stack.remote_infer：可选 NVIDIA Integrate 等 HTTPS；默认关闭（enabled=false）。启用云端时还须在环境中设 LIFERS_ALLOW_REMOTE_INFER=1 才会注入 LIFERS_REMOTE_CHAT（本地/Kali 权重无需此项）。",
     "lifers_gate": "HTTP 服务 scripts/lifers_gate.py（代号 lifers / 中文：终身监禁者）默认 127.0.0.1:55555；POST /v1/step 与 agent_bridge 同款 JSON。勿对公网绑定 0.0.0.0。",
     "embodied_world": "stack.embodied_world：平面物理步进 + 视觉摘要 + 启发式决策；读同一 weights/.train_control（pause/stop/run）与训练对齐；CLI scripts/embodied_tick_once.py。"
   },
@@ -90,7 +90,7 @@
     "model": "meta/llama-3.1-8b-instruct",
     "max_tokens": 1024,
     "api_key_env": "NVIDIA_API_KEY",
-    "note_zh": "默认关闭：无密钥亦可对话（本地 lifers_transformer.json / Markov + 记忆）。需要 NVIDIA Integrate 等大模型时：enabled=true + 环境变量密钥 + 重启编辑器；或仅开扩展「lifers.remoteChat」+ 密钥。api_key 禁止写入仓库。不要本地回退时设 LIFERS_LOCAL_FALLBACK=0。"
+    "note_zh": "默认关闭：无密钥亦可对话（本地 lifers_transformer.json / Markov + 记忆）。启用云端时：stack.enabled=true 且在本机环境变量设 LIFERS_ALLOW_REMOTE_INFER=1，并配置密钥（或扩展 lifers.remoteChat）；重启编辑器。api_key 禁止写入仓库。不要本地回退时设 LIFERS_LOCAL_FALLBACK=0。"
   },
   "llm_ops": {
     "enabled": true,

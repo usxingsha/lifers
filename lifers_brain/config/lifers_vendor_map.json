@@ -3,6 +3,7 @@
   "primary_product": "Lifers (lifers_brain LocalBrain / stack.json / tools)",
   "policy_zh": "便携根目录名 lifers（与 GitHub 仓 lifers 一致）。以 Lifers 配置与 Python 工具链为唯一运行时真相；vendor 树仅供对照、审计与迁移参考，不在此进程内启动 OpenClaw 或 claw-code 网关。云 API 不进 stack.brain。",
   "policy_en": "Lifers stack is authoritative at runtime; vendor trees are reference-only; no OpenClaw or claw-code gateway in-process; no cloud API keys in stack.brain.",
+  "oss_ai_ecosystem_manifest": "lifers_brain/config/oss_ai_ecosystem_manifest.json",
   "vendors": [
     {
       "id": "openclaw_upstream",
@@ -24,6 +25,7 @@
     "stack.json + organ_capabilities + lifers_ai_playbook_zh",
     "openclaw_manifest.json (capability boundaries vs upstream)",
     "lifers_vendor_map.json (this file) + two vendor manifests",
+    "oss_ai_ecosystem_manifest.json (mainstream OSS AI URLs, licenses, integration posture)",
     "optional: third_party source trees (read/audit only)"
   ]
 }

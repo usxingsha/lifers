@@ -37,3 +37,6 @@
 
 # claw-code/rust vendor: local cargo output must not be committed
 /third_party/claw_code_rust/target/
+
+# 可选：vendor_oss_ai_reference_fetch.ps1 浅克隆的上游参考树（勿默认入库）
+/third_party/_refs/

@@ -13,7 +13,8 @@
     "claw_code_rust_vendor": "third_party/claw_code_rust：Kali ~/claw-code/rust 源码并入（见 config/claw_code_rust_vendor.json、LIFERS_MERGE.md）；非 Lifers 运行时；不把其 HTTP/API 接入 stack。",
     "remote_infer": "stack.remote_infer：可选 NVIDIA Integrate 等 HTTPS；默认关闭（enabled=false）。启用云端时还须在环境中设 LIFERS_ALLOW_REMOTE_INFER=1 才会注入 LIFERS_REMOTE_CHAT（本地/Kali 权重无需此项）。",
     "lifers_gate": "HTTP 服务 scripts/lifers_gate.py（代号 lifers / 中文：终身监禁者）默认 127.0.0.1:55555；POST /v1/step 与 agent_bridge 同款 JSON。勿对公网绑定 0.0.0.0。",
-    "embodied_world": "stack.embodied_world：平面物理步进 + 视觉摘要 + 启发式决策；读同一 weights/.train_control（pause/stop/run）与训练对齐；CLI scripts/embodied_tick_once.py。"
+    "embodied_world": "stack.embodied_world：平面物理步进 + 视觉摘要 + 启发式决策；读同一 weights/.train_control（pause/stop/run）与训练对齐；CLI scripts/embodied_tick_once.py。",
+    "oss_ai_ecosystem": "主流开源 AI 框架/训练/推理栈的对照清单：lifers_brain/config/oss_ai_ecosystem_manifest.json（链接+许可证+集成建议）；全量上游不入仓；已并入 vendor 仍以 openclaw 子模块与 claw_code_rust 为准，见 lifers_vendor_map.json。"
   },
   "runtime": {
     "role": "auto",

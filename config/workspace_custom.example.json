@@ -1,5 +1,5 @@
 {
-  "_readme": "CN: 复制为 workspace_custom.json（gitignore）。非空 folders 会完全替换 integrated_layout.roots；空数组 [] 则沿用 layout。 | EN: Non-empty folders replaces roots; [] keeps integrated_layout.",
+  "_readme": "CN: 复制为 workspace_custom.json（gitignore）。非空 folders 会完全替换 integrated_layout.roots；空数组 [] 则沿用 layout。首根文件夹决定编辑器默认打开的「工作区」侧栏上下文：默认 rs0（./rs0）。可与 rs0 同级新建目录（如 ./lab、./notes），把第一项改为 { \"name\": \"lab\", \"path\": \"./lab\" }，再在便携根 mkdir 对应文件夹；然后 python tools/materialize_integrated_workspace.py 并重载窗口。 | EN: First folder is default workspace root (rs0). Add a sibling folder at repo root and point path there.",
   "folders": [
     { "name": "rs0", "path": "./rs0" },
     { "name": "lifers", "path": "." },

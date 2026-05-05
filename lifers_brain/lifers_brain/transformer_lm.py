@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import random
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, TextIO, Tuple
+from typing import Any, Dict, List, TextIO, Tuple
 
-from lifers_brain.speed_env import max_speed_enabled, train_control_every_steps, train_save_every
+from lifers_brain.speed_env import max_speed_enabled, train_control_every_steps, train_save_every, use_numpy_training
 from lifers_brain.train_control import LifersTrainingPause, LifersTrainingStop, read_train_control
 from lifers_brain.train_progress import end_progress_line, write_progress_line
 
@@ -215,6 +216,125 @@ def forward(w: TinyTransformerWeights, ids: List[int]) -> List[List[float]]:
     return logits
 
 
+def _try_numpy():  # type: ignore[no-any-unimported]
+    try:
+        import numpy as np  # noqa: PLC0415
+
+        return np
+    except ImportError:
+        return None
+
+
+def _layer_norm_np(X, np: Any) -> Any:
+    mu = X.mean(axis=1, keepdims=True)
+    var = ((X - mu) ** 2).mean(axis=1, keepdims=True)
+    return (X - mu) / np.sqrt(var + 1e-5)
+
+
+def _softmax_rows_np(scores: Any, np: Any) -> Any:
+    m = scores.max(axis=1, keepdims=True)
+    ex = np.exp(scores - m)
+    return ex / ex.sum(axis=1, keepdims=True)
+
+
+def _attention_causal_np(
+    X: Any,
+    Wq: Any,
+    Wk: Any,
+    Wv: Any,
+    Wo: Any,
+    np: Any,
+) -> Any:
+    d = int(X.shape[1])
+    Q = X @ Wq
+    K = X @ Wk
+    Vv = X @ Wv
+    scale = 1.0 / math.sqrt(float(d))
+    scores = (Q @ K.T) * scale
+    t = int(scores.shape[0])
+    if t > 1:
+        tri = np.triu(np.ones((t, t), dtype=np.float64), k=1)
+        scores = np.where(tri > 0, -1e9, scores)
+    attn = _softmax_rows_np(scores, np)
+    out = attn @ Vv
+    return out @ Wo
+
+
+def forward_np(
+    w: TinyTransformerWeights,
+    tok_emb: Any,
+    pos_emb: Any,
+    Wq: Any,
+    Wk: Any,
+    Wv: Any,
+    Wo: Any,
+    W1: Any,
+    W2: Any,
+    Wlm: Any,
+    ids: List[int],
+    np: Any,
+) -> Any:
+    """Same semantics as forward(); tensors are ndarray views (Wlm may be updated in-place)."""
+    t_len = min(len(ids), w.max_seq)
+    d_model = w.d_model
+    d_ff = w.d_ff
+    idx = np.asarray(ids[:t_len], dtype=np.intp)
+    te = tok_emb[idx]
+    pe = pos_emb[:t_len]
+    X = te + pe
+    X = _layer_norm_np(X, np)
+    A = _attention_causal_np(X, Wq, Wk, Wv, Wo, np)
+    X2 = _layer_norm_np(X + A, np)
+    H = np.maximum(0.0, X2 @ W1)
+    F = H @ W2
+    Y = _layer_norm_np(X2 + F, np)
+    return Y @ Wlm  # [T, V]
+
+
+def _np_tensors_from_weights(w: TinyTransformerWeights, np: Any) -> tuple[Any, ...]:
+    return (
+        np.asarray(w.tok_emb, dtype=np.float64),
+        np.asarray(w.pos_emb, dtype=np.float64),
+        np.asarray(w.Wq, dtype=np.float64),
+        np.asarray(w.Wk, dtype=np.float64),
+        np.asarray(w.Wv, dtype=np.float64),
+        np.asarray(w.Wo, dtype=np.float64),
+        np.asarray(w.W1, dtype=np.float64),
+        np.asarray(w.W2, dtype=np.float64),
+        np.asarray(w.Wlm, dtype=np.float64),
+    )
+
+
+def _tiny_from_np_tensors(
+    w: TinyTransformerWeights,
+    tok_emb: Any,
+    pos_emb: Any,
+    Wq: Any,
+    Wk: Any,
+    Wv: Any,
+    Wo: Any,
+    W1: Any,
+    W2: Any,
+    Wlm: Any,
+) -> TinyTransformerWeights:
+    return TinyTransformerWeights(
+        vocab=w.vocab,
+        d_model=w.d_model,
+        d_ff=w.d_ff,
+        n_heads=w.n_heads,
+        max_seq=w.max_seq,
+        tok_emb=tok_emb.tolist(),
+        pos_emb=pos_emb.tolist(),
+        Wq=Wq.tolist(),
+        Wk=Wk.tolist(),
+        Wv=Wv.tolist(),
+        Wo=Wo.tolist(),
+        W1=W1.tolist(),
+        W2=W2.tolist(),
+        Wlm=Wlm.tolist(),
+    )
+
+
 def generate_text(
     w: TinyTransformerWeights,
     prompt: str,
@@ -298,16 +418,6 @@ def train_sgd_minimal(
     V = len(vocab)
     D = d_model
 
-    def loss_for_batch(start: int) -> float:
-        seq = ids[start : start + max_seq + 1]
-        x = seq[:-1]
-        y = seq[1:]
-        logits = forward(w, x)
-        # NLL of last position only to keep it light
-        last = logits[-1]
-        probs = _softmax(last)
-        return -math.log(max(1e-9, probs[y[-1]]))
-
     # Finite-difference update on Wlm only (tiny & slow but dependency-free).
     # Keep it deliberately small so the full pipeline stays fast.
     stream: TextIO | None = None
@@ -320,6 +430,94 @@ def train_sgd_minimal(
         tty_every = max(1, steps // 25)
     ctrl_chk = train_control_every_steps(log_every)
     save_every = train_save_every(steps)
+
+    np_mod = _try_numpy()
+    if (
+        os.environ.get("LIFERS_USE_NUMPY", "").strip().lower() in ("1", "true", "yes", "on")
+        and np_mod is None
+    ):
+        print(
+            "[train_sgd] LIFERS_USE_NUMPY=1 but numpy is not installed; falling back to pure Python",
+            file=sys.stderr,
+        )
+    use_np = use_numpy_training(np_mod is not None)
+
+    if use_np:
+        assert np_mod is not None
+        tok_emb, pos_emb, Wq, Wk, Wv, Wo, W1, W2, Wlm = _np_tensors_from_weights(w, np_mod)
+        thr_line = (
+            os.environ.get("OMP_NUM_THREADS", "").strip()
+            or os.environ.get("OPENBLAS_NUM_THREADS", "").strip()
+            or os.environ.get("MKL_NUM_THREADS", "").strip()
+        )
+        tip = f"OMP_NUM_THREADS={thr_line}" if thr_line else "export OMP_NUM_THREADS=$(nproc)  # Linux: saturate CPU"
+        print(f"[train_sgd] NumPy/BLAS forward path — {tip}", file=sys.stderr)
+
+        def loss_np(start: int) -> float:
+            seq = ids[start : start + max_seq + 1]
+            x = seq[:-1]
+            y = seq[1:]
+            logits = forward_np(w, tok_emb, pos_emb, Wq, Wk, Wv, Wo, W1, W2, Wlm, x, np_mod)
+            last = logits[-1]
+            m = float(last.max())
+            ex = np_mod.exp(last - m)
+            pr = ex / ex.sum()
+            return -math.log(max(1e-9, float(pr[y[-1]])))
+
+        def save_np() -> None:
+            _tiny_from_np_tensors(w, tok_emb, pos_emb, Wq, Wk, Wv, Wo, W1, W2, Wlm).save(out_path)
+
+        for step in range(steps):
+            if control_path is not None and (step == 0 or (step + 1) % ctrl_chk == 0):
+                mode = read_train_control(control_path)
+                if mode in ("pause", "stop"):
+                    save_np()
+                    if mode == "stop":
+                        raise LifersTrainingStop()
+                    raise LifersTrainingPause()
+
+            start = rng.randrange(0, max(1, len(ids) - (max_seq + 2)))
+            base_loss = loss_np(start)
+
+            for _ in range(3):
+                i = rng.randrange(0, D)
+                j = rng.randrange(0, V)
+                old = float(Wlm[i, j])
+                eps = 1e-3
+                Wlm[i, j] = old + eps
+                l2 = loss_np(start)
+                grad = (l2 - base_loss) / eps
+                Wlm[i, j] = old - lr * grad
+
+            if (step + 1) % save_every == 0 or step + 1 == steps:
+                save_np()
+            if stream is not None:
+                upd = tty_every if stream.isatty() else log_every
+                if max_speed_enabled():
+                    upd = max(upd, max(1, steps // 55))
+                if step == 0 or (step + 1) % upd == 0 or step + 1 == steps:
+                    write_progress_line(
+                        stream,
+                        step + 1,
+                        steps,
+                        prefix=f"train_sgd V={V} D={D} ",
+                    )
+
+        if stream is not None:
+            end_progress_line(stream)
+
+        save_np()
+        return _tiny_from_np_tensors(w, tok_emb, pos_emb, Wq, Wk, Wv, Wo, W1, W2, Wlm)
+
+    def loss_for_batch(start: int) -> float:
+        seq = ids[start : start + max_seq + 1]
+        x = seq[:-1]
+        y = seq[1:]
+        logits = forward(w, x)
+        # NLL of last position only to keep it light
+        last = logits[-1]
+        probs = _softmax(last)
+        return -math.log(max(1e-9, probs[y[-1]]))
 
     for step in range(steps):
         if control_path is not None and (step == 0 or (step + 1) % ctrl_chk == 0):

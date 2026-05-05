@@ -29,6 +29,16 @@ Lifers Kali — 一页速查（跟着跑）
 
 【拷权重回 Windows】
   scp kali@主机:~/lifers/lifers_brain/weights/lifers_transformer.json 本机 lifers_brain\weights\
+  # 或在本机仓库：lifers_brain\scripts\sync_weights_from_kali.ps1
+  # 定时自动拉（mtime 变才下大文件）：sync_weights_from_kali.ps1 -Watch
+  # 每 5 分钟：sync_weights_from_kali.ps1 -WatchIntervalSec 300
+
+【训练吃满 CPU（train_sgd / escalate）】
+  纯 Python 列表矩阵默认单核；安装 NumPy 后 train_sgd 自动走 BLAS 矩阵乘（多核）。
+    pip install numpy   # 或 apt install python3-numpy
+  禁用 NumPy 路径（调试用）：export LIFERS_USE_NUMPY=0
+  Linux 拉满线程（按 CPU 核数）：export OMP_NUM_THREADS=$(nproc)
+  亦可：export OPENBLAS_NUM_THREADS=$(nproc)
 
 【自修复 stack】LIFERS_SELF_HEAL=1 默认开；缺键合并、坏 JSON 从模板恢复。
 【自改代码】往 state/self_code_queue/ 放 JSON：{"rel_path":"...","new_text":"..."}；SANDBOX=0；见 playbook §9.6

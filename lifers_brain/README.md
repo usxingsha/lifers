@@ -17,6 +17,8 @@ Python 包名 **`lifers_brain`**；便携仓库根目录历史上曾名 **`rs`**
 
 **速度（训练 / 执行 / HTTP）**：设环境变量 **`LIFERS_MAX_SPEED=1`**（或在 Kali/tmux 里 `export` 后再启训练）可启用：`train_sgd` **降低大权重复核 JSON 写盘频率**、pause 轮询更密、HTTP 超时上限收紧、本地 LM 生成长度上限缩小；详见 **`lifers_brain/speed_env.py`** 与 **`scripts/LIFERS_KALI_CHEATSHEET_zh.txt`**。仍可用 **`LIFERS_TRAIN_SAVE_EVERY`**、**`LIFERS_PAUSE_POLL_SEC`**、**`LIFERS_HTTP_TIMEOUT_CAP`** 逐项覆盖。代理不通时扩展里 **`lifers.httpDirect`: true** 或 **`LIFERS_HTTP_DIRECT=1`**。
 
+**训练吃满 CPU（Kali 上常仅 ~20–30%）**：`train_sgd` 的纯 Python 列表实现是**单核**的；安装 **NumPy** 后（`pip install numpy` 或 `apt install python3-numpy`）同一代码会走 **NumPy/BLAS 前向**（`transformer_lm.py`），再设 **`export OMP_NUM_THREADS=$(nproc)`**（或 `OPENBLAS_NUM_THREADS`）以用满多核。显式关闭加速路径：`LIFERS_USE_NUMPY=0`。
+
 **布局（v0.4.5+）**：**Agents Chat** 在**中间编辑器**；**会话建立**（会话树）在**左侧活动栏 → Lifers** 下，与 **Agents** 启动器同栏（不再依赖 Secondary Side Bar）。命令：**Lifers: 打开 Agents Chat**、**Lifers: 显示会话建立**。**上下文**：**Lifers: 添加上下文文件**、**Lifers: 添加目录为上下文**（递归收集文件路径，受设置 `lifers.*` 限制）。
 
 **Kali 训练权重**：`scripts/package_rs_for_kali.ps1` → `dist/lifers_kali.tar.gz`；在 Kali 上解压后跑 **`scripts/kali_install_full_train.sh`**（默认 `full` + 名义 **`LIFERS_TARGET_PARAM_B=20`** 的渐进放大，遇 **OOM** 停止；产物 **`weights/lifers_*.json`**）。详见 **`scripts/KALI_WEIGHTS.md`**。  

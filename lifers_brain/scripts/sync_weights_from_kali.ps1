@@ -7,11 +7,13 @@
   cd lifers_brain\scripts
   .\sync_weights_from_kali.ps1
   .\sync_weights_from_kali.ps1 -KaliHost 192.168.234.152 -Force
+  .\sync_weights_from_kali.ps1 -Watch
+  .\sync_weights_from_kali.ps1 -WatchIntervalSec 300
 
 .NOTES
   - 默认仅当远端 lifers_transformer.json 比本地新（mtime）或本地缺失时才拉取大文件； -Force 强制覆盖。
   - 大块权重可用 SFTP 压缩：scp 自带 -C。
-  - 「完成一次同步一次」：训练段落结束或 pause 后在本机执行本脚本即可。
+  - 「完成一段同步一次」：训练 pause/checkpoint 后在本机执行本脚本；或用 -Watch 定时轮询远端 mtime。
 #>
 param(
     [string] $KaliUser = "kali",
@@ -19,13 +21,21 @@ param(
     [string] $RemoteBrain = "/home/kali/lifers/lifers_brain",
     [switch] $Force,
     [switch] $IncludeTinyBackup,
-    [switch] $IncludeCheckpoints
+    [switch] $IncludeCheckpoints,
+    [switch] $Watch,
+    [int] $WatchIntervalSec = 0
 )
 
 $ErrorActionPreference = "Stop"
 $BrainRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $Weights = Join-Path $BrainRoot "weights"
-New-Item -ItemType Directory -Force -Path $Weights | Out-Null
+
+$pollSec = 0
+if ($Watch) {
+    $pollSec = if ($WatchIntervalSec -gt 0) { $WatchIntervalSec } else { 120 }
+} elseif ($WatchIntervalSec -gt 0) {
+    $pollSec = $WatchIntervalSec
+}
 
 $sshTarget = "${KaliUser}@${KaliHost}"
 $rw = "$RemoteBrain/weights"
@@ -45,9 +55,10 @@ function RemoteStat([string] $Rel) {
 }
 
 function ShouldPullLargeTransformer {
+    param([string] $WeightsDir)
     $remote = RemoteStat "lifers_transformer.json"
     if (-not $remote) { Write-Host "[skip] remote lifers_transformer.json missing"; return $false }
-    $local = Join-Path $Weights "lifers_transformer.json"
+    $local = Join-Path $WeightsDir "lifers_transformer.json"
     if (-not (Test-Path $local)) { Write-Host "[pull] local missing"; return $true }
     if ($Force) { Write-Host "[pull] -Force"; return $true }
     try {
@@ -63,55 +74,78 @@ function ShouldPullLargeTransformer {
     return $false
 }
 
-function Scp-File([string] $Rel) {
+function Scp-File([string] $Rel, [string] $WeightsDir) {
     $src = "${sshTarget}:$rw/$Rel".Replace("\", "/")
-    $dst = Join-Path $Weights (Split-Path $Rel -Leaf)
+    $dst = Join-Path $WeightsDir (Split-Path $Rel -Leaf)
     Write-Host "scp -C $Rel ..."
     & scp -C -o BatchMode=yes -o ConnectTimeout=60 $src $dst
     if ($LASTEXITCODE -ne 0) { throw "scp failed for $Rel" }
 }
 
-Write-Host "=== Lifers weights sync from Kali ==="
-Write-Host "remote $rw"
+function Sync-LifersWeightsOnce {
+    param(
+        [string] $WeightsDir,
+        [string] $RemoteWeightsPath
+    )
 
-$small = @(
-    ".train_control",
-    "lifers_markov.json",
-    ".lifers_train_state.json"
-)
-foreach ($f in $small) {
-    $st = RemoteStat $f
-    if (-not $st) {
-        Write-Host "[skip] $f not on remote"
-        continue
+    New-Item -ItemType Directory -Force -Path $WeightsDir | Out-Null
+
+    Write-Host "=== Lifers weights sync from Kali ==="
+    Write-Host "remote $RemoteWeightsPath"
+
+    $small = @(
+        ".train_control",
+        "lifers_markov.json",
+        ".lifers_train_state.json"
+    )
+    foreach ($f in $small) {
+        $st = RemoteStat $f
+        if (-not $st) {
+            Write-Host "[skip] $f not on remote"
+            continue
+        }
+        Scp-File $f $WeightsDir
     }
-    Scp-File $f
-}
 
-if (ShouldPullLargeTransformer) {
-    Scp-File "lifers_transformer.json"
-} elseif (-not $Force) {
-    Write-Host "(use -Force to re-download lifers_transformer.json anyway)"
-}
-
-if ($IncludeTinyBackup) {
-    $st = RemoteStat "tiny_transformer_v001.json"
-    if ($st) { Scp-File "tiny_transformer_v001.json" }
-}
-
-if ($IncludeCheckpoints) {
-    Write-Host "=== checkpoints (optional bulk) ==="
-    Invoke-Ssh "test -d $rw/checkpoints && tar czf /tmp/lifers_ckpt.tgz -C $rw checkpoints || true" | Out-Null
-    $has = Invoke-Ssh "test -f /tmp/lifers_ckpt.tgz && echo yes || echo no"
-    if ($has -match "yes") {
-        & scp -C "${sshTarget}:/tmp/lifers_ckpt.tgz" $Weights
-        Push-Location $Weights
-        try { tar -xzf lifers_ckpt.tgz 2>$null } finally { Pop-Location }
-        Remove-Item (Join-Path $Weights "lifers_ckpt.tgz") -Force -ErrorAction SilentlyContinue
-        Write-Host "checkpoints extracted under weights/checkpoints"
-    } else {
-        Write-Host "no checkpoints dir on remote"
+    if (ShouldPullLargeTransformer -WeightsDir $WeightsDir) {
+        Scp-File "lifers_transformer.json" $WeightsDir
+    } elseif (-not $Force) {
+        Write-Host "(use -Force to re-download lifers_transformer.json anyway)"
     }
+
+    if ($IncludeTinyBackup) {
+        $st = RemoteStat "tiny_transformer_v001.json"
+        if ($st) { Scp-File "tiny_transformer_v001.json" $WeightsDir }
+    }
+
+    if ($IncludeCheckpoints) {
+        Write-Host "=== checkpoints (optional bulk) ==="
+        Invoke-Ssh "test -d $RemoteWeightsPath/checkpoints && tar czf /tmp/lifers_ckpt.tgz -C $RemoteWeightsPath checkpoints || true" | Out-Null
+        $has = Invoke-Ssh "test -f /tmp/lifers_ckpt.tgz && echo yes || echo no"
+        if ($has -match "yes") {
+            & scp -C "${sshTarget}:/tmp/lifers_ckpt.tgz" $WeightsDir
+            Push-Location $WeightsDir
+            try { tar -xzf lifers_ckpt.tgz 2>$null } finally { Pop-Location }
+            Remove-Item (Join-Path $WeightsDir "lifers_ckpt.tgz") -Force -ErrorAction SilentlyContinue
+            Write-Host "checkpoints extracted under weights/checkpoints"
+        } else {
+            Write-Host "no checkpoints dir on remote"
+        }
+    }
+
+    Write-Host "Done. Local: $WeightsDir"
 }
 
-Write-Host "Done. Local: $Weights"
+if ($pollSec -gt 0) {
+    Write-Host "Watch mode: polling every ${pollSec}s (Ctrl+C to stop). First sync now..."
+    while ($true) {
+        try {
+            Sync-LifersWeightsOnce -WeightsDir $Weights -RemoteWeightsPath $rw
+        } catch {
+            Write-Warning "sync failed: $_"
+        }
+        Start-Sleep -Seconds $pollSec
+    }
+} else {
+    Sync-LifersWeightsOnce -WeightsDir $Weights -RemoteWeightsPath $rw
+}

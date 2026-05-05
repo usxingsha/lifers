@@ -9,6 +9,23 @@ def max_speed_enabled() -> bool:
     return v in ("1", "true", "yes", "max", "on")
 
 
+def use_numpy_training(numpy_import_ok: bool) -> bool:
+    """
+    NumPy/BLAS forward path for train_sgd (releases GIL in matmul; set OMP_NUM_THREADS / OPENBLAS_NUM_THREADS).
+
+    - Unset or LIFERS_USE_NUMPY=1|auto: use NumPy when import succeeds (default on capable installs).
+    - LIFERS_USE_NUMPY=0: force pure-Python lists (single-threaded; low CPU % on large matrices).
+    """
+    raw = os.environ.get("LIFERS_USE_NUMPY", "").strip().lower()
+    if raw in ("0", "false", "no", "off"):
+        return False
+    if not numpy_import_ok:
+        return False
+    if raw in ("", "1", "true", "yes", "on", "auto"):
+        return True
+    return False
+
+
 def pause_poll_seconds() -> float:
     raw = os.environ.get("LIFERS_PAUSE_POLL_SEC", "").strip()
     if raw:

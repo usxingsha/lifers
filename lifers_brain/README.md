@@ -21,6 +21,8 @@ Python 包名 **`lifers_brain`**；便携仓库根目录历史上曾名 **`rs`**
 
 **每日 AI 健康与自动纠偏（本地）**：`python eval/daily_ai_health.py`（或 `scripts/run_daily_ai_health.ps1` / `scripts/run_daily_ai_health.sh`）汇总 **eval 套件（逻辑/格式/一致性代理）**、**`eval/full_system_check.py` 全链**、**桥接延迟**、**多文件上下文吞吐**（`LIFERS_CONTEXT_MAX_FILES` 扫描），报告写入 **`state/daily_health/latest.json`**（目录已 gitignore）。可选 **`LIFERS_DAILY_HEALTH_AUTO_REMEDIATE=1`**：仅在检查通过且负载偏高时，把 **`lifers.contextMaxFiles` / `lifers.bridgeContextMaxFiles` / `lifers.bridgeTimeoutMs`** 合并进 **`config/workspace_custom.json`**（已忽略提交）并尝试运行 **`tools/materialize_integrated_workspace.py`**。
 
+**Windows 每天自动跑**：`powershell -ExecutionPolicy Bypass -File scripts\register_daily_ai_health_task.ps1`（当前用户、默认每日 **04:30**；日志 **`state/daily_health/scheduled.log`**）。卸载：`register_daily_ai_health_task.ps1 -Unregister`。
+
 **布局（v0.4.5+）**：**Agents Chat** 在**中间编辑器**；**会话建立**（会话树）在**左侧活动栏 → Lifers** 下，与 **Agents** 启动器同栏（不再依赖 Secondary Side Bar）。命令：**Lifers: 打开 Agents Chat**、**Lifers: 显示会话建立**。**上下文**：**Lifers: 添加上下文文件**、**Lifers: 添加目录为上下文**（递归收集文件路径，受设置 `lifers.*` 限制）。
 
 **Kali 训练权重**：`scripts/package_rs_for_kali.ps1` → `dist/lifers_kali.tar.gz`；在 Kali 上解压后跑 **`scripts/kali_install_full_train.sh`**（默认 `full` + 名义 **`LIFERS_TARGET_PARAM_B=20`** 的渐进放大，遇 **OOM** 停止；产物 **`weights/lifers_*.json`**）。详见 **`scripts/KALI_WEIGHTS.md`**。  

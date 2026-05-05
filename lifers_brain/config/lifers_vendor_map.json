@@ -5,6 +5,7 @@
   "policy_en": "Lifers stack is authoritative at runtime; vendor trees are reference-only; no OpenClaw or claw-code gateway in-process; no cloud API keys in stack.brain.",
   "external_ai_frameworks_posture_zh": "通用深度学习与 LLM 工业栈（张量运行时、变换器库、分布式与混合精度封装、推理服务、分词器等）以本机与 Kali 上的系统包与 PyPI 安装为准，不在本仓复制整棵上游源码。Lifers 自有训练与推理以 lifers_brain 内脚本与 weights 下 JSON 为主；大体积预训练权重不入 Git，仅在机器间 scp 或现有同步脚本传递。需要对照上游实现时，在独立工作区做只读检出，不并入本仓 third_party。",
   "external_ai_frameworks_posture_en": "Use OS packages and PyPI for large upstream frameworks; do not vendor full framework trees here. Lifers training and inference stay in lifers_brain; large pretrained blobs stay out of git and move via existing sync flows.",
+  "chat_api_shape_note_zh": "与 OpenAI 风格 messages 对齐的最小结构见 lifers_brain/chat_messages.py（仅互操作类型，不含上游框架源码）。",
   "vendors": [
     {
       "id": "openclaw_upstream",

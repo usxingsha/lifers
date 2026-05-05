@@ -2,6 +2,8 @@
 
 Python 包名 **`lifers_brain`**；便携仓库根目录历史上曾名 **`rs`**，现工作区与配置统一以 **`lifers`** 为显示名（见 `config/integrated_layout.json`）。Offline local agent, tools, eval/sim stubs.
 
+**自测（会话分类 / CHAT_QUICK / Bridge JSON）**：在 **`lifers_brain`** 目录执行 `PYTHONPATH=. python -m unittest discover -s tests -p "test_*.py" -v`（见 `tests/test_session_dialogue.py`；不依赖 PyTorch）。
+
 ## Agents 侧栏
 
 **VSCodium / 便携**：请用便携根下的 **`run_lifers_vscodium.bat`**（扩展目录 → **`data\extensions`**）。安装/更新后 **Developer: Reload Window**。

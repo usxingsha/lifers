@@ -7,12 +7,14 @@
   cd C:\...\rs\lifers_brain\scripts
   .\push_brain_and_loop_kali.ps1
   .\push_brain_and_loop_kali.ps1 -KaliHost "kali@192.168.234.152" -SkipBootstrap
+  .\push_brain_and_loop_kali.ps1 -PauseTrainFirst -SkipBootstrap   # 先写 pause 再只解压同步，不自动起 tmux
 #>
 param(
   [string] $KaliHost = "kali@192.168.234.152",
   [string] $SshKey = "$env:USERPROFILE\.ssh\id_ed25519",
   [switch] $SkipPackage,
-  [switch] $SkipBootstrap
+  [switch] $SkipBootstrap,
+  [switch] $PauseTrainFirst
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,6 +32,26 @@ if (!$SkipPackage) {
   & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "package_rs_for_kali.ps1")
 }
 if (!(Test-Path -LiteralPath $Tar)) { throw "missing tarball: $Tar" }
+
+if ($PauseTrainFirst) {
+  Write-Host "=== SSH: pause remote train (best-effort, bash) ===" -ForegroundColor Cyan
+  # Must run via bash - zsh treats "[pause]" as a glob when passed as default login shell argv.
+  $pauseUnix = @'
+set -euo pipefail
+if [[ -f "$HOME/lifers/lifers_brain/scripts/lifers_train_ctl.sh" ]]; then
+  bash "$HOME/lifers/lifers_brain/scripts/lifers_train_ctl.sh" pause
+  echo "pause-ok"
+else
+  echo "pause-skipped-no-ctl-yet"
+fi
+'@
+  $pauseUnix = ($pauseUnix -replace "`r`n", "`n").TrimEnd() + "`n"
+  $b64p = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($pauseUnix))
+  & $ssh @sshOpts $KaliHost "echo $b64p | base64 -d | bash -s --" 2>&1 | Write-Host
+  if ($LASTEXITCODE -ne 0) {
+    Write-Warning "pause SSH exited $LASTEXITCODE (continuing with scp)"
+  }
+}
 
 $remoteTar = "/tmp/lifers_kali_push.tar.gz"
 Write-Host "scp -> ${KaliHost}:$remoteTar"

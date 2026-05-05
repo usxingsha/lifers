@@ -70,7 +70,8 @@ class SessionDialogueTests(unittest.TestCase):
             os.environ["LIFERS_QUICK_CHAT_LEARN"] = "0"
             os.environ["LIFERS_TASKFLOW"] = "1"
             os.environ["LIFERS_MICRO_THINK_EVERY"] = "999"
-            agent = LifersAgent(AgentConfig(root_dir=root, model="markov", sandbox=False))
+            os.environ["LIFERS_QUICK_WEB"] = "0"
+            agent = LifersAgent(AgentConfig(root_dir=root, model="markov", sandbox=True))
             n0 = agent.longterm.count_all()
             r = run_lifers_turn(agent, "今天适合做什么？")
             self.assertTrue(r.strip())
@@ -88,6 +89,8 @@ class SessionDialogueTests(unittest.TestCase):
             os.environ["LIFERS_FORCE_LOCAL_ONLY"] = "1"
             os.environ["LIFERS_QUICK_CHAT_LEARN"] = "0"
             os.environ["LIFERS_MICRO_THINK_EVERY"] = "999"
+            os.environ["LIFERS_QUICK_WEB"] = "0"
+            os.environ["SANDBOX"] = "1"
             body = json.dumps({"text": "用一句话介绍你自己。", "contextFiles": []}, ensure_ascii=False)
             out = lifers_turn_from_json_body(root, body)
             self.assertTrue(out.get("ok"), msg=out.get("error"))

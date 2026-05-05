@@ -8,7 +8,7 @@ Lifers Kali — 一页速查（跟着跑）
   或先：su - kali
   若提示「找不到 show_train_progress.py」：Kali 上这份树 **不是 git clone**（打包时排除了 .git），**不要用 git pull** → 在 Windows 跑：
     lifers_brain\scripts\push_brain_and_loop_kali.ps1
-  只更新代码、暂不起 tmux 循环：同一脚本加 **-SkipBootstrap**；先暂停再同步：**-PauseTrainFirst -SkipBootstrap**
+  只解压合并、暂不起 tmux：**-SkipBootstrap**（默认会先 SSH pause 训练）。不要 pause：**-SkipPauseTrainFirst**。
   weights/.train_status.json 只有 **新版训练在跑/跑过** 才会生成；旧目录或训练未写入前 cat 会报「没有那个文件」。
   zsh 报 corrupt history：mv ~/.zsh_history ~/.zsh_history.bad; touch ~/.zsh_history
 

@@ -1,20 +1,21 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  打包 lifers_brain（不含 weights）、scp 到 Kali、解压并启动 Markov + escalate 长期循环（tmux lifers-stack）。
+  从仓库根目录打包（见 package_rs_for_kali.ps1）、scp 到 Kali、解压合并到 ~/lifers；默认先 SSH pause；可选启动长期训练循环（tmux lifers-stack）。
 
 .EXAMPLE
   cd C:\...\rs\lifers_brain\scripts
   .\push_brain_and_loop_kali.ps1
   .\push_brain_and_loop_kali.ps1 -KaliHost "kali@192.168.234.152" -SkipBootstrap
-  .\push_brain_and_loop_kali.ps1 -PauseTrainFirst -SkipBootstrap   # 先写 pause 再只解压同步，不自动起 tmux
+  .\push_brain_and_loop_kali.ps1 -SkipBootstrap   # 默认先 SSH pause；只解压合并，不自动起 tmux
+  .\push_brain_and_loop_kali.ps1 -SkipPauseTrainFirst -SkipBootstrap  # 不 pause（极少用）
 #>
 param(
   [string] $KaliHost = "kali@192.168.234.152",
   [string] $SshKey = "$env:USERPROFILE\.ssh\id_ed25519",
   [switch] $SkipPackage,
   [switch] $SkipBootstrap,
-  [switch] $PauseTrainFirst
+  [switch] $SkipPauseTrainFirst
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,7 +34,7 @@ if (!$SkipPackage) {
 }
 if (!(Test-Path -LiteralPath $Tar)) { throw "missing tarball: $Tar" }
 
-if ($PauseTrainFirst) {
+if (-not $SkipPauseTrainFirst) {
   Write-Host "=== SSH: pause remote train (best-effort, bash) ===" -ForegroundColor Cyan
   # Must run via bash - zsh treats "[pause]" as a glob when passed as default login shell argv.
   $pauseUnix = @'

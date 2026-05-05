@@ -1,34 +1,75 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  将当前 Lifers 根目录（lifers 或 lifers_brain）打成 tar.gz，便于 scp 到 Kali 解压后跑 scripts/kali_train_weights.sh。
+  从 Lifers **仓库根目录** 打 tar.gz（Windows→Kali 合并同步，不经由 git）；含 lifers_brain、third_party（OpenClaw 检出源码、claw_code_rust）、tools、根配置等。
+
+.DESCRIPTION
+  排除：.git、子模块内 .git、node_modules、各 .venv、Rust target、打包产物目录、可选 weights、体积巨大的 data/ 与 shell/。
+  OpenClaw 以工作区已检出的文件树打入包（子模块先 git submodule update）。
+
+.PARAMETER IncludeWeights
+  为 true 时包含 lifers_brain/weights（可能极大，会覆盖 Kali 同名文件）。
+
+.PARAMETER IncludeData
+  为 true 时包含仓库根下 data/（通常含编辑器缓存，体积极大，默认排除）。
 
 .EXAMPLE
-  cd C:\...\rs\lifers_brain\scripts
+  cd lifers_brain\scripts
   .\package_rs_for_kali.ps1
-  scp ..\dist\lifers_kali.tar.gz user@kali:~/ 
+  .\package_rs_for_kali.ps1 -IncludeWeights
 #>
+param(
+  [switch] $IncludeWeights,
+  [switch] $IncludeData
+)
+
 $ErrorActionPreference = "Stop"
 $BrainRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$Parent = Split-Path $BrainRoot -Parent
-$Leaf = Split-Path $BrainRoot -Leaf
+$RepoRoot = (Resolve-Path (Join-Path $BrainRoot "..")).Path
 $Dist = Join-Path $BrainRoot "dist"
 New-Item -ItemType Directory -Force -Path $Dist | Out-Null
 $Out = Join-Path $Dist "lifers_kali.tar.gz"
 if (Test-Path $Out) { Remove-Item $Out -Force }
 
-Push-Location $Parent
+$oc = Join-Path $RepoRoot "third_party\openclaw\package.json"
+if (-not (Test-Path -LiteralPath $oc)) {
+  Write-Host "=== git submodule update (openclaw) ===" -ForegroundColor Cyan
+  Push-Location $RepoRoot
+  try {
+    git submodule update --init --recursive --depth 1
+    if ($LASTEXITCODE -ne 0) { throw "git submodule update failed" }
+  } finally {
+    Pop-Location
+  }
+}
+
+$Leaf = Split-Path $BrainRoot -Leaf
+if ($Leaf -ne "lifers_brain") { throw "expected lifers_brain as parent of scripts, got $Leaf" }
+
+Push-Location $RepoRoot
 try {
-  # Windows 10+ bsdtar: exclude venv/cache/git; shrink tarball
-  $ex1 = "--exclude=$Leaf/.venv"
-  $ex2 = "--exclude=$Leaf/**/__pycache__"
-  $ex3 = "--exclude=$Leaf/.git"
-  $ex4 = "--exclude=$Leaf/dist/*.tar.gz"
-  # 避免把 Windows 上的小权重覆盖 Kali 上已训练数小时的大 JSON
-  $ex5 = "--exclude=$Leaf/weights"
-  # 不把本机 API 密钥打进包（仍可用 OS 环境变量在 Kali 上配置）
-  $ex6 = "--exclude=$Leaf/config/secrets.env"
-  & tar -czf $Out $ex1 $ex2 $ex3 $ex4 $ex5 $ex6 $Leaf
+  $ex = @(
+    "--exclude=.git",
+    "--exclude=third_party/openclaw/.git",
+    "--exclude=third_party/openclaw/node_modules",
+    "--exclude=third_party/claw_code_rust/target",
+    "--exclude=third_party/_refs",
+    "--exclude=lifers_brain/.venv",
+    "--exclude=lifers_brain/dist",
+    "--exclude=__pycache__",
+    "--exclude=lifers_brain/config/secrets.env",
+    "--exclude=**/node_modules",
+    "--exclude=shell",
+    "--exclude=.cursor"
+  )
+  if (-not $IncludeData) {
+    $ex += "--exclude=data"
+  }
+  if (-not $IncludeWeights) {
+    $ex += "--exclude=lifers_brain/weights"
+  }
+  Write-Host "tar -C $RepoRoot (repo root, excludes: $($ex.Count) rules)" -ForegroundColor Cyan
+  & tar -czf $Out @ex .
   if ($LASTEXITCODE -ne 0) { throw "tar exit $LASTEXITCODE" }
 }
 finally {
@@ -36,7 +77,10 @@ finally {
 }
 
 Write-Host "Wrote $Out"
-Write-Host "Note: tarball has no .git — on Kali use push_brain_and_loop_kali.ps1 to refresh; do not git pull in ~/lifers."
-Write-Host "Kali 示例:"
-Write-Host "  mkdir -p ~/lifers && tar -xzf lifers_kali.tar.gz -C ~/lifers"
-Write-Host "  cd ~/lifers/$Leaf && bash scripts/kali_train_weights.sh"
+if (-not $IncludeWeights) {
+  Write-Host "Note: lifers_brain/weights excluded (use -IncludeWeights to pack and overwrite Kali weights)."
+}
+if (-not $IncludeData) {
+  Write-Host "Note: data/ excluded (use -IncludeData to include editor cache tree)."
+}
+Write-Host "Kali merge: mkdir -p ~/lifers && tar -xzf lifers_kali.tar.gz -C ~/lifers"

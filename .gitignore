@@ -11,6 +11,9 @@
 # 本地二进制壳（可选）
 /LifersShell.exe
 
+# 大权重：从 Kali 拉取，勿入版本库（见 lifers_brain/scripts/sync_weights_from_kali.ps1）
+/lifers_brain/weights/lifers_transformer.json
+
 # 会话侧本地状态
 /lifers_brain/.lifers/
 

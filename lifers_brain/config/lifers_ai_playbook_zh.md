@@ -29,7 +29,7 @@
 - 推荐打开便携根（文件夹 **`lifers`**）下的 **`lifers.code-workspace`**（同目录备有 **`rs.code-workspace`** 兼容副本），使 **Python 解释器** 指向 **`${workspaceFolder:lifers_brain}`** 与仓库一致。
 - **Agents Chat**：中间编辑区对话；**会话建立**：左侧 **Lifers** 活动栏或 **资源管理器** 底部同名视图（镜像）。
 - 改 **`lifers.*` 设置** 或 **`config/stack.json`** 后：**Developer: Reload Window** 或重开 Bridge 所在窗口。
-- **模型**：`lifers`（与 transformer 同权重）、`markov`；**超时**：`lifers.bridgeTimeoutMs`。
+- **模型**：Agents Chat / Bridge **固定 `MODEL=lifers`**（与 `weights/lifers_transformer.json` 对齐）；终端脚本仍可自选。**超时**：`lifers.bridgeTimeoutMs`。
 - **上下文**：`lifers.contextMaxFiles`、Chat 内 `@` 路径、`lifers: 添加上下文文件/目录` 命令。
 
 ## 5. 回复规范（防乱码、防胡编）
@@ -87,8 +87,8 @@
 
 ### 9.4 本地对话（默认）与远程大模型（可选）
 
-- **默认无需 API**：`stack.remote_infer.enabled=false`，扩展 **`lifers.remoteChat=false`**，Agents Chat 走 **本地 Lifers 权重（`weights/lifers_transformer.json`）/ Markov + 会话记忆**，不要求 **`NVIDIA_API_KEY`**。
-- **需要 NVIDIA Integrate 等云端时**：`stack.remote_infer.enabled=true` + **`LIFERS_ALLOW_REMOTE_INFER=1`**（本机环境）+ 密钥 + **完全重启编辑器**；或仅开 **`lifers.remoteChat=true`** 并配置密钥。密钥勿写入仓库。
+- **日常默认（推荐）**：扩展向 Bridge 注入 **`LIFERS_FORCE_LOCAL_ONLY`** + **`MODEL=lifers`**：Agents Chat **不走** NVIDIA/OpenAI 兼容云端 Chat，**不要求任何 API 密钥**。推理只用 **`weights/lifers_transformer.json`** + 会话记忆；需要事实时用 **`SANDBOX=0`** 下的 **`web_search` / `web_fetch`**（联网≠云端大模型）。核验链接用本机 **浏览器** 手动打开。
+- **可选云端 Chat（高级）**：仅在**终端**自行运行 Python、且**不**设置 `LIFERS_FORCE_LOCAL_ONLY` 时，`stack.remote_infer` + `LIFERS_ALLOW_REMOTE_INFER=1` + 环境变量密钥才可能生效；默认编辑器路径不依赖此项。
 - 仅云端、不要本地回退：**`LIFERS_LOCAL_FALLBACK=0`**。代理不通：**`LIFERS_HTTP_DIRECT=1`** 或 **`lifers.httpDirect`: true**
 
 ### 9.5 自修复配置（stack）

@@ -31,6 +31,9 @@ def lifers_turn(root: Path, text: str, context_files: List[Any]) -> Dict[str, An
     from lifers_brain.stack_env import apply_stack_env
 
     apply_stack_env(root)
+    # Bridge（扩展）默认注入 LIFERS_FORCE_LOCAL_ONLY：禁用云端 chat/completions，仅用本地权重 + 联网工具。
+    if os.environ.get("LIFERS_FORCE_LOCAL_ONLY", "").strip().lower() in ("1", "true", "yes", "on"):
+        os.environ.pop("LIFERS_REMOTE_CHAT", None)
 
     ctx_files = context_files if isinstance(context_files, list) else []
     max_ctx = int(os.environ.get("LIFERS_CONTEXT_MAX_FILES", "32").strip() or "32")

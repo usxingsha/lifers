@@ -11,6 +11,8 @@
   document.getElementById('btn-run').addEventListener('click', () => post('run'));
   document.getElementById('btn-stop').addEventListener('click', () => post('stop'));
   document.getElementById('btn-sync').addEventListener('click', () => post('sync'));
+  const btnProgress = document.getElementById('btn-progress');
+  if (btnProgress) btnProgress.addEventListener('click', () => post('progress'));
   document.getElementById('btn-open-settings').addEventListener('click', () => vscode.postMessage({ type: 'openSettings' }));
 
   window.addEventListener('message', (ev) => {

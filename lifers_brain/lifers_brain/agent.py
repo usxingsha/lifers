@@ -659,6 +659,8 @@ class LifersAgent:
 
     def _remote_quick_chat_attempt(self, user_line: str) -> Optional[str]:
         """stack.remote_infer / LIFERS_REMOTE_CHAT：OpenAI 兼容 HTTPS（仅标准库），密钥来自环境变量。"""
+        if os.environ.get("LIFERS_FORCE_LOCAL_ONLY", "").strip().lower() in ("1", "true", "yes", "on"):
+            return None
         if os.environ.get("LIFERS_REMOTE_CHAT", "").strip().lower() not in ("1", "true", "yes", "on"):
             return None
         from lifers_brain.openai_compat_chat import chat_completion_text, resolve_api_key

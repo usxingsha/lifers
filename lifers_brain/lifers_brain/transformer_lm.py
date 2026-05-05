@@ -12,6 +12,7 @@ from typing import Any, Dict, List, TextIO, Tuple
 from lifers_brain.speed_env import max_speed_enabled, train_control_every_steps, train_save_every, use_numpy_training
 from lifers_brain.train_control import LifersTrainingPause, LifersTrainingStop, read_train_control
 from lifers_brain.train_progress import end_progress_line, write_progress_line
+from lifers_brain.train_status_file import refresh_sgd_status
 
 
 def _softmax(xs: List[float]) -> List[float]:
@@ -502,6 +503,10 @@ def train_sgd_minimal(
                         steps,
                         prefix=f"train_sgd V={V} D={D} ",
                     )
+                    try:
+                        refresh_sgd_status(step + 1, steps, V, D)
+                    except Exception:
+                        pass
 
         if stream is not None:
             end_progress_line(stream)
@@ -555,6 +560,10 @@ def train_sgd_minimal(
                     steps,
                     prefix=f"train_sgd V={V} D={D} ",
                 )
+                try:
+                    refresh_sgd_status(step + 1, steps, V, D)
+                except Exception:
+                    pass
 
     if stream is not None:
         end_progress_line(stream)

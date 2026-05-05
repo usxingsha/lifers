@@ -114,6 +114,17 @@ function activate(context) {
     maybeStartLifersGate(root, py, port);
   }, 1400);
 
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (
+        e.affectsConfiguration('lifers.brandIconMode') ||
+        e.affectsConfiguration('lifers.brandIconAlternateSeconds')
+      ) {
+        sessionTreeProvider.refresh();
+        controller.postBrandConfigToWebviews();
+      }
+    })
+  );
 }
 
 function legacyHistoryPath(root) {
@@ -266,11 +277,23 @@ function maybeStartLifersGate(brainRoot, py, port) {
   gateHealthOk(port, (up) => {
     if (up) return;
     try {
+      const conf = vscode.workspace.getConfiguration('lifers');
+      const sandbox = conf.get('sandbox') !== false;
+      const httpDirect = conf.get('httpDirect') !== false;
+      const env = {
+        ...process.env,
+        PYTHONUTF8: '1',
+        LIFERS_ROOT: brainRoot,
+        MODEL: 'lifers',
+        LIFERS_FORCE_LOCAL_ONLY: '1',
+        SANDBOX: sandbox ? '1' : '0',
+      };
+      if (httpDirect) env.LIFERS_HTTP_DIRECT = '1';
       const proc = cp.spawn(py, ['-u', script, '--host', '127.0.0.1', '--port', String(port)], {
         cwd: brainRoot,
         detached: true,
         stdio: 'ignore',
-        env: { ...process.env, PYTHONUTF8: '1', LIFERS_ROOT: brainRoot },
+        env,
       });
       proc.unref();
     } catch {
@@ -497,6 +520,39 @@ class LifersAgentsController {
   /** @param {import('./session_tree.js').LifersSessionTreeProvider | undefined} p */
   setSessionTreeProvider(p) {
     this._sessionTreeProvider = p;
+  }
+
+  /** Refresh brand icon mode / interval in open webviews (paths unchanged). */
+  postBrandConfigToWebviews() {
+    const conf = vscode.workspace.getConfiguration('lifers');
+    const mode = conf.get('brandIconMode') || 'alternate';
+    const sec = Math.max(1, Math.min(120, Number(conf.get('brandIconAlternateSeconds')) || 4));
+    const brand = { mode, intervalMs: sec * 1000 };
+    const post = (wv) => {
+      try {
+        wv?.postMessage({ type: 'lifersBrand', brand });
+      } catch {
+        /* ignore */
+      }
+    };
+    post(this._chatPanel?.webview);
+    post(this._launcherView?.webview);
+    post(this._controlView?.webview);
+  }
+
+  /**
+   * @param {vscode.Webview} webview
+   */
+  _brandObjectForWebview(webview) {
+    const conf = vscode.workspace.getConfiguration('lifers');
+    const mode = conf.get('brandIconMode') || 'alternate';
+    const sec = Math.max(1, Math.min(120, Number(conf.get('brandIconAlternateSeconds')) || 4));
+    const kitten = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'icon.png')).toString();
+    const phoenixFs = path.join(this.extensionUri.fsPath, 'media', 'phoenix-void.png');
+    const phoenix = fs.existsSync(phoenixFs)
+      ? webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'phoenix-void.png')).toString()
+      : kitten;
+    return { kitten, phoenix, mode, intervalMs: sec * 1000 };
   }
 
   /**
@@ -785,9 +841,7 @@ class LifersAgentsController {
       return;
     }
     if (msg.type === 'setLifersModel') {
-      const raw = String(msg.model || '').toLowerCase();
-      const m = raw === 'markov' ? 'markov' : raw === 'transformer' ? 'transformer' : 'lifers';
-      await vscode.workspace.getConfiguration('lifers').update('model', m, vscode.ConfigurationTarget.Workspace);
+      await vscode.workspace.getConfiguration('lifers').update('model', 'lifers', vscode.ConfigurationTarget.Workspace);
       this._postConfigToChat();
       return;
     }
@@ -859,21 +913,17 @@ class LifersAgentsController {
 
   _lifersConfigPayload() {
     const conf = vscode.workspace.getConfiguration('lifers');
-    const m = conf.get('model');
-    const model = m === 'markov' ? 'markov' : m === 'transformer' ? 'transformer' : 'lifers';
     return {
-      model,
+      model: 'lifers',
       sandbox: conf.get('sandbox') !== false,
     };
   }
 
   _postConfigToChat() {
     const conf = vscode.workspace.getConfiguration('lifers');
-    const m = conf.get('model');
-    const model = m === 'markov' ? 'markov' : m === 'transformer' ? 'transformer' : 'lifers';
     this._chatPanel?.webview.postMessage({
       type: 'lifersConfig',
-      model,
+      model: 'lifers',
       sandbox: conf.get('sandbox') !== false,
     });
   }
@@ -1098,20 +1148,21 @@ class LifersAgentsController {
    * @param {vscode.Webview} webview
    */
   getLauncherHtml(webview) {
-    return this._htmlShell(webview, 'launcher.css', 'launcher.js', this._launcherBody());
+    return this._htmlShell(webview, 'launcher.css', 'launcher.js', this._launcherBody(webview));
   }
 
   /**
    * @param {vscode.Webview} webview
    */
   getControlPanelHtml(webview) {
-    return this._htmlShell(webview, 'control_panel.css', 'control_panel.js', this._controlPanelBody());
+    return this._htmlShell(webview, 'control_panel.css', 'control_panel.js', this._controlPanelBody(webview));
   }
 
-  _controlPanelBody() {
+  _controlPanelBody(webview) {
+    const iconUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'icon.png'));
     return `
   <div>
-    <h1>Lifers 总控（Kali 算力 + 同步）</h1>
+    <h1><img class="lifers-brand-img cp-brand-img" src="${iconUri}" width="22" height="22" alt="" /> Lifers 总控（Kali 算力 + 同步）</h1>
     <p class="hint">依赖本机 <code>ssh</code>；路径在设置 <code>lifers.kaliSshPrefix</code>、<code>lifers.kaliBrainPath</code>。
     底部同一栏另有「会话建立」树。物化闭环在仓库：<code>scripts/embodied_tick_once.py</code> + <code>stack.embodied_world</code>（先 pause 再同步）。</p>
     <div class="row">
@@ -1120,6 +1171,7 @@ class LifersAgentsController {
       <button type="button" id="btn-run">继续 run</button>
       <button type="button" class="secondary" id="btn-stop">stop</button>
       <button type="button" id="btn-sync">本机打包+scp</button>
+      <button type="button" id="btn-progress">训练进度</button>
       <button type="button" class="secondary" id="btn-open-settings">扩展设置</button>
     </div>
     <textarea id="out" readonly rows="14" spellcheck="false"></textarea>
@@ -1147,7 +1199,7 @@ class LifersAgentsController {
       post(await this._runWindowsPackAndScp());
       return;
     }
-    if (!['status', 'pause', 'run', 'stop'].includes(act)) {
+    if (!['status', 'pause', 'run', 'stop', 'progress'].includes(act)) {
       post('未知操作');
       return;
     }
@@ -1155,7 +1207,7 @@ class LifersAgentsController {
   }
 
   /**
-   * @param {'status'|'pause'|'run'|'stop'} act
+   * @param {'status'|'pause'|'run'|'stop'|'progress'} act
    */
   async _runRemoteKaliTrainCtl(act) {
     const conf = vscode.workspace.getConfiguration('lifers');
@@ -1168,6 +1220,7 @@ class LifersAgentsController {
       `act=${JSON.stringify(act)}`,
       `case "$act" in`,
       `status) echo "=== .train_control ==="; cat "$BR/weights/.train_control" 2>/dev/null || echo "(none)"; echo "=== process ==="; pgrep -af train_lifers_escalate 2>/dev/null || true; echo "=== weights ==="; stat -c "%s %y" "$BR/weights/lifers_transformer.json" 2>/dev/null || echo missing;;`,
+      `progress) python3 "$BR/scripts/show_train_progress.py" "$BR" 2>/dev/null || { echo "=== raw .train_status.json ==="; cat "$BR/weights/.train_status.json" 2>/dev/null || echo "(none)"; };;`,
       `pause) printf "pause\\n" >"$BR/weights/.train_control" && echo OK_pause;;`,
       `run) printf "run\\n" >"$BR/weights/.train_control" && echo OK_run;;`,
       `stop) printf "stop\\n" >"$BR/weights/.train_control" && echo OK_stop;;`,
@@ -1217,8 +1270,9 @@ class LifersAgentsController {
     const nonce = getNonce();
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', cssName));
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', jsName));
-    const iconUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'icon.png'));
-    const iconStr = iconUri.toString();
+    const brandScriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'brand_icons.js'));
+    const brandObj = this._brandObjectForWebview(webview);
+    const brandSer = JSON.stringify(brandObj).replace(/</g, '\\u003c');
     const csp = [
       `default-src 'none'`,
       `style-src ${webview.cspSource} 'unsafe-inline'`,
@@ -1232,10 +1286,11 @@ class LifersAgentsController {
   <meta http-equiv="Content-Security-Policy" content="${csp}" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link href="${styleUri}" rel="stylesheet" />
-  <script nonce="${nonce}">window.__LIFERS_BRAND_ICON__=${JSON.stringify(iconStr)};</script>
+  <script nonce="${nonce}">window.__LIFERS_BRAND__=${brandSer};window.__LIFERS_BRAND_ICON__=window.__LIFERS_BRAND__.kitten;</script>
 </head>
 <body>
 ${bodyInner}
+  <script nonce="${nonce}" src="${brandScriptUri}"></script>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
@@ -1252,7 +1307,7 @@ ${bodyInner}
       <span class="chat-toolbar-title">Agents Chat</span>
       <div class="chat-toolbar-actions">
         <button type="button" class="tb-btn" id="btn-open-docs" title="README">
-          <img class="aw-inline-icon" src="${iconUri}" width="14" height="14" alt="" /> Docs
+          <img class="aw-inline-icon lifers-brand-img" src="${iconUri}" width="14" height="14" alt="" /> Docs
         </button>
         <button type="button" class="tb-btn" id="btn-market">Marketplace</button>
       </div>
@@ -1292,14 +1347,10 @@ ${bodyInner}
         <div id="at-pop" class="composer-pop hidden" role="listbox" aria-label="Path completion"></div>
         <div class="composer-toolbar">
           <div class="toolbar-left">
-            <div class="pill-agent" title="本地模型（lifers.model）">
+            <div class="pill-agent" title="固定 MODEL=lifers（本地权重 weights/lifers_transformer.json）">
               <span class="pill-infty" aria-hidden="true">∞</span>
               <span class="pill-text">Agent</span>
-              <select id="sel-agent" class="toolbar-select">
-                <option value="lifers">Lifers</option>
-                <option value="transformer">transformer</option>
-                <option value="markov">markov</option>
-              </select>
+              <span id="lifers-model-badge" class="lifers-model-badge">Lifers</span>
             </div>
             <select id="sel-sandbox" class="toolbar-select toolbar-select--mode" title="Sandbox（lifers.sandbox）">
               <option value="safe">Auto</option>
@@ -1308,11 +1359,11 @@ ${bodyInner}
           </div>
           <div class="toolbar-right">
             <span id="send-spinner" class="send-spinner hidden" role="status" aria-label="Sending"></span>
-            <button type="button" class="icon-btn icon-btn--brand" id="btn-attach-file" title="添加文件到上下文"><img class="icon-btn-img" src="${iconUri}" width="18" height="18" alt="" /></button>
-            <button type="button" class="icon-btn icon-btn--brand" id="btn-attach-folder" title="添加目录到上下文（递归采集）"><img class="icon-btn-img" src="${iconUri}" width="18" height="18" alt="" /></button>
-            <button type="button" class="icon-btn icon-btn--disabled icon-btn--brand" id="btn-voice" disabled title="语音输入（未接入）"><img class="icon-btn-img icon-btn-img--muted" src="${iconUri}" width="18" height="18" alt="" /></button>
+            <button type="button" class="icon-btn icon-btn--brand" id="btn-attach-file" title="添加文件到上下文"><img class="icon-btn-img lifers-brand-img" src="${iconUri}" width="18" height="18" alt="" /></button>
+            <button type="button" class="icon-btn icon-btn--brand" id="btn-attach-folder" title="添加目录到上下文（递归采集）"><img class="icon-btn-img lifers-brand-img" src="${iconUri}" width="18" height="18" alt="" /></button>
+            <button type="button" class="icon-btn icon-btn--disabled icon-btn--brand" id="btn-voice" disabled title="语音输入（未接入）"><img class="icon-btn-img icon-btn-img--muted lifers-brand-img" src="${iconUri}" width="18" height="18" alt="" /></button>
             <button type="button" class="aw-send" id="btn-send" title="发送">
-              <img class="aw-send-icon" src="${iconUri}" width="18" height="18" alt="" />
+              <img class="aw-send-icon lifers-brand-img" src="${iconUri}" width="18" height="18" alt="" />
             </button>
           </div>
         </div>
@@ -1321,9 +1372,11 @@ ${bodyInner}
   </div>`;
   }
 
-  _launcherBody() {
+  _launcherBody(webview) {
+    const iconUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'icon.png'));
     return `
   <div class="launcher-root">
+    <p class="launcher-brand-row"><img class="lifers-brand-img launcher-brand-img" src="${iconUri}" width="44" height="44" alt="" /></p>
     <p class="launcher-hint">会话列表：<strong>左侧 Lifers →「会话建立」</strong>；<strong>资源管理器</strong>内也有镜像树；<strong>底部面板 → Lifers 总控</strong> 栏内还有一份「会话建立」+「算力与同步」总控（关掉侧栏后请用这里）。</p>
     <p class="launcher-hint">Sessions: Lifers bar, Explorer, or bottom panel Lifers 总控.</p>
     <button type="button" class="launcher-btn" id="btn-chat">打开 Agents Chat</button>
@@ -1340,13 +1393,8 @@ ${bodyInner}
   async _handleSend(root, text, sessionId, contextFiles) {
     const conf = vscode.workspace.getConfiguration('lifers');
     const py = resolveLifersPythonExecutable(conf.get('pythonPath'), root);
-    const model = conf.get('model') || 'lifers';
     const sandbox = conf.get('sandbox') !== false;
     const httpDirect = conf.get('httpDirect') !== false;
-    const remoteChat = conf.get('remoteChat') === true;
-    const chatApiUrl = String(conf.get('chatApiUrl') || 'https://integrate.api.nvidia.com/v1/chat/completions').trim();
-    const chatModel = String(conf.get('chatModel') || 'meta/llama-3.1-8b-instruct').trim();
-    const chatApiKeyEnv = String(conf.get('chatApiKeyEnv') || 'NVIDIA_API_KEY').trim();
     const bridgeMax = Number(conf.get('bridgeContextMaxFiles')) || 32;
     const timeoutMs = Math.max(5000, Number(conf.get('bridgeTimeoutMs')) || 600000);
 
@@ -1410,17 +1458,10 @@ ${bodyInner}
             PYTHONIOENCODING: 'utf-8',
             LIFERS_ROOT: root,
             SANDBOX: sandbox ? '1' : '0',
-            MODEL: String(model),
+            MODEL: 'lifers',
+            LIFERS_FORCE_LOCAL_ONLY: '1',
             LIFERS_CONTEXT_MAX_FILES: String(bridgeMax),
             ...(httpDirect ? { LIFERS_HTTP_DIRECT: '1' } : {}),
-            ...(remoteChat
-              ? {
-                  LIFERS_REMOTE_CHAT: '1',
-                  LIFERS_CHAT_URL: chatApiUrl,
-                  LIFERS_CHAT_MODEL: chatModel,
-                  LIFERS_CHAT_API_KEY_ENV: chatApiKeyEnv,
-                }
-              : {}),
           },
         });
         let stdout = '';
@@ -1502,7 +1543,7 @@ ${bodyInner}
       const replyText =
         parsed.text != null && String(parsed.text).trim()
           ? String(parsed.text)
-          : '（模型返回为空，可重试或切换 lifers.model）';
+          : '（模型返回为空，可重试；检查 weights/lifers_transformer.json 与 SANDBOX=0 联网）';
 
       const d3 = this._readHistory(root);
       const s2 = d3.sessions.find((x) => x.id === s.id);

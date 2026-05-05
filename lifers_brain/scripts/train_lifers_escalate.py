@@ -37,6 +37,7 @@ from lifers_brain.train_control import (
     write_train_control,
 )
 from lifers_brain.train_progress import end_progress_line, write_progress_line
+from lifers_brain.train_status_file import finalize_train_status, publish_escalate_snapshot
 from lifers_brain.transformer_lm import TinyTransformerWeights, build_vocab_from_text, train_sgd_minimal
 
 
@@ -280,6 +281,13 @@ def main() -> int:
         f"V={max_vocab} D={d_model} F={d_ff} S={max_seq} steps={steps}",
         flush=True,
     )
+    publish_escalate_snapshot(
+        root,
+        phase="ramp_ready",
+        ramp_max=max_iters,
+        cumulative_est_g=cumulative_est / 1e9,
+        message="see weights/.train_status.json for live progress",
+    )
 
     last_err: str | None = None
     for it in range(start_it, max_iters):
@@ -299,6 +307,31 @@ def main() -> int:
         print(
             f"[lifers-escalate] iter {it + 1}/{max_iters} est_params≈{est / 1e6:.3f}M  train…",
             flush=True,
+        )
+        os.environ["LIFERS_TRAIN_STATUS_BRAIN_ROOT"] = str(root)
+        os.environ["LIFERS_TRAIN_STATUS_RAMP_ITER"] = str(it + 1)
+        os.environ["LIFERS_TRAIN_STATUS_RAMP_MAX"] = str(max_iters)
+        os.environ["LIFERS_TRAIN_STATUS_TIER_EST_M"] = str(est / 1e6)
+        os.environ["LIFERS_TRAIN_STATUS_MAX_V"] = str(max_vocab)
+        os.environ["LIFERS_TRAIN_STATUS_D"] = str(d_model)
+        os.environ["LIFERS_TRAIN_STATUS_DFF"] = str(d_ff)
+        os.environ["LIFERS_TRAIN_STATUS_MS"] = str(max_seq)
+        os.environ["LIFERS_TRAIN_STATUS_STEPS"] = str(steps)
+        publish_escalate_snapshot(
+            root,
+            phase="tier_sgd",
+            ramp_iter=it + 1,
+            ramp_max=max_iters,
+            tier_est_m=est / 1e6,
+            max_vocab=max_vocab,
+            d_model=d_model,
+            d_ff=d_ff,
+            max_seq=max_seq,
+            steps=steps,
+            sgd_step=0,
+            sgd_total=steps,
+            cumulative_est_g=cumulative_est / 1e9,
+            message=f"tier {it + 1}/{max_iters} — SGD running",
         )
         try:
             train_sgd_minimal(
@@ -323,11 +356,13 @@ def main() -> int:
             print("[lifers-escalate] paused (control mid-tier); weights saved. Re-run or set control=run.", flush=True)
             end_progress_line(sys.stdout)
             _save_train_state(state_path, cumulative_est, last_b_floor)
+            finalize_train_status(root, "paused", "control pause mid-tier")
             return 0
         except LifersTrainingStop:
             print("[lifers-escalate] stopped (control mid-tier); weights saved.", flush=True)
             end_progress_line(sys.stdout)
             _save_train_state(state_path, cumulative_est, last_b_floor)
+            finalize_train_status(root, "stopped", "control stop mid-tier")
             return 0
         except MemoryError:
             last_err = "MemoryError"
@@ -377,12 +412,26 @@ def main() -> int:
 
     end_progress_line(sys.stdout)
 
-    if out.is_file():
+    ok_weights = out.is_file()
+    if ok_weights:
         print(f"[lifers-escalate] wrote {out}", flush=True)
         if last_err:
             print(f"[lifers-escalate] note: {last_err}", flush=True)
+    else:
+        print("[lifers-escalate] failed: no output weights", file=sys.stderr, flush=True)
+
+    if ok_weights:
+        phase_end = "completed"
+        msg_end = "ramp finished ok"
+        if last_err == "MemoryError":
+            phase_end = "oom"
+            msg_end = "MemoryError — last successful weights kept"
+        elif last_err:
+            phase_end = "error"
+            msg_end = last_err[:400]
+        finalize_train_status(root, phase_end, msg_end)
         return 0
-    print("[lifers-escalate] failed: no output weights", file=sys.stderr, flush=True)
+    finalize_train_status(root, "failed", "no output weights")
     return 1
 
 

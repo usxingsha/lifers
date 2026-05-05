@@ -8,6 +8,13 @@ body {
 h1 {
   font-size: 1.05em;
   margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cp-brand-img {
+  border-radius: 4px;
+  flex-shrink: 0;
 }
 .row {
   display: flex;

@@ -9,11 +9,11 @@ Python 包名 **`lifers_brain`**；便携仓库根目录历史上曾名 **`rs`**
 **一键全量同步 UI（推荐）**：`powershell -NoProfile -ExecutionPolicy Bypass -File scripts\sync_lifers_agents_ui_windows_kali.ps1`  
 （不打断 Kali 训练加 **`-SkipTrainPause`**；同步后让训练继续加 **`-ResumeKaliTrain`**；只看 Kali 训练状态：`scripts\kali_train_status.ps1`）
 
-**对话质量预期**：`weights/lifers_transformer.json` 由 **`train_lifers_escalate.py` / `train_transformer_weights.py`** 等写入（同一 JSON 格式），质量随训练进度上升；**不是** ChatGPT 级开箱体验。短输入容易采样飘；请用**完整中文**或 **search …** / **remote_infer** 接云端大模型。训练写入权重后，对话侧按文件更新时间热加载（边训边用）。
+**对话质量预期**：`weights/lifers_transformer.json` 由 **`train_lifers_escalate.py` / `train_transformer_weights.py`** 等写入（同一 JSON 格式），质量随训练进度上升；**不是** ChatGPT 级开箱体验。短输入容易采样飘；请用**完整中文**或 **`search …`** 走联网检索；需要更强模型时再考虑可选云端（见下）。训练写入权重后，对话侧按文件更新时间热加载（边训边用）。
 
 **训练/权重/纠错知识注入**：长文约定在 **`config/lifers_ai_playbook_zh.md` §9**（经 `llm_ops` 进入对话上下文）；含 Kali tmux、checkpoint、速度变量、常见误操作。**自修复**：`LIFERS_SELF_HEAL`（默认开）合并缺失 `stack` 键；**自改代码**：`state/self_code_queue/` JSON → `self_code_runner`（见 playbook §9.6）。
 
-**NVIDIA / OpenAI 兼容远程推理（可选）**：默认只用本地 **`weights/lifers_transformer.json`**（Kali 训练同步即可）。若 **`stack.json` → `remote_infer.enabled=true`**，还须在本机环境设 **`LIFERS_ALLOW_REMOTE_INFER=1`** 才会走云端 chat/completions；并配置 **`NVIDIA_API_KEY`**（或扩展 **`lifers.remoteChat=true`**，二者均为显式开启）。详见 **`config/nvidia_api.env.example`**。仅远程、不要本地回退时设 **`LIFERS_LOCAL_FALLBACK=0`**。
+**Agents Chat 默认路径（无需 API 密钥）**：扩展向 Bridge 注入 **`MODEL=lifers`**、**`LIFERS_FORCE_LOCAL_ONLY`**：只用本地 **`weights/lifers_transformer.json`** + 工具链；联网事实检索用 **`SANDBOX=0`** 下的 **`web_search` / `web_fetch`**（你在本机浏览器里点开链接核验）。**可选云端 Chat（高级）**：仅在终端手动跑 Python 且不设 `LIFERS_FORCE_LOCAL_ONLY` 时，`stack.remote_infer` + `LIFERS_ALLOW_REMOTE_INFER` + 密钥才可能生效；详见 **`config/lifers_ai_playbook_zh.md` §9.4** 与 **`config/nvidia_api.env.example`**。
 
 **速度（训练 / 执行 / HTTP）**：设环境变量 **`LIFERS_MAX_SPEED=1`**（或在 Kali/tmux 里 `export` 后再启训练）可启用：`train_sgd` **降低大权重复核 JSON 写盘频率**、pause 轮询更密、HTTP 超时上限收紧、本地 LM 生成长度上限缩小；详见 **`lifers_brain/speed_env.py`** 与 **`scripts/LIFERS_KALI_CHEATSHEET_zh.txt`**。仍可用 **`LIFERS_TRAIN_SAVE_EVERY`**、**`LIFERS_PAUSE_POLL_SEC`**、**`LIFERS_HTTP_TIMEOUT_CAP`** 逐项覆盖。代理不通时扩展里 **`lifers.httpDirect`: true** 或 **`LIFERS_HTTP_DIRECT=1`**。
 

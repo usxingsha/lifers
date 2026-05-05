@@ -13,7 +13,6 @@
   const ctxExpanded = document.getElementById('ctx-expanded');
   const btnClearCtx = document.getElementById('btn-clear-all-ctx');
   const btnReviewReadme = document.getElementById('btn-review-readme');
-  const selAgent = document.getElementById('sel-agent');
   const selSandbox = document.getElementById('sel-sandbox');
   const btnAttachFile = document.getElementById('btn-attach-file');
   const btnAttachFolder = document.getElementById('btn-attach-folder');
@@ -24,6 +23,15 @@
   const bridgeProgressText = document.getElementById('bridge-progress-text');
 
   const brandIcon = typeof window.__LIFERS_BRAND_ICON__ === 'string' ? window.__LIFERS_BRAND_ICON__ : '';
+
+  function currentBrandSrc() {
+    const b = window.__LIFERS_BRAND__;
+    if (!b || !b.kitten) return brandIcon;
+    if (b.mode === 'kitten') return b.kitten;
+    if (b.mode === 'phoenix') return b.phoenix || b.kitten;
+    var ms = Math.max(1000, Number(b.intervalMs) || 4000);
+    return Math.floor(Date.now() / ms) % 2 === 0 ? b.kitten : (b.phoenix || b.kitten);
+  }
 
   /** @type {{ sessions: any[]; activeId: string | null; contextFiles: string[] }} */
   let state = {
@@ -75,6 +83,14 @@
     if (msg.type === 'lifersConfig') {
       applyLifersConfig(msg);
     }
+    if (msg.type === 'lifersBrand') {
+      window.__LIFERS_BRAND__ = Object.assign({}, window.__LIFERS_BRAND__ || {}, msg.brand || {});
+      window.__LIFERS_BRAND_ICON__ = window.__LIFERS_BRAND__.kitten || window.__LIFERS_BRAND_ICON__;
+      if (typeof window.applyLifersBrandIcons === 'function') {
+        window.applyLifersBrandIcons();
+      }
+      renderChat();
+    }
     if (msg.type === 'reply') {
       /* 扩展先 post bootstrap 再 post reply；此处只结束「发送中」状态 */
       sending = false;
@@ -106,9 +122,6 @@
    */
   function applyLifersConfig(cfg) {
     if (!cfg) return;
-    if (selAgent && cfg.model) {
-      selAgent.value = ['markov', 'lifers', 'transformer'].includes(cfg.model) ? cfg.model : 'lifers';
-    }
     if (selSandbox && typeof cfg.sandbox === 'boolean') {
       selSandbox.value = cfg.sandbox ? 'safe' : 'unsafe';
     }
@@ -359,11 +372,12 @@
     const div = document.createElement('div');
     const isUser = role === 'user';
     div.className = isUser ? 'msg-user' : 'msg-bot';
-    if (brandIcon) {
+    if (brandIcon || (window.__LIFERS_BRAND__ && window.__LIFERS_BRAND__.kitten)) {
+      var src = currentBrandSrc() || brandIcon;
       div.innerHTML =
         '<span class="msg-head"><img src="' +
-        brandIcon +
-        '" width="16" height="16" alt=""/> ' +
+        src +
+        '" width="16" height="16" alt="" class="lifers-brand-img"/> ' +
         (isUser ? 'You' : 'Agent') +
         '</span><br/>' +
         escapeHtml(text).replace(/\n/g, '<br/>');
@@ -407,12 +421,6 @@
   if (btnReviewReadme) {
     btnReviewReadme.addEventListener('click', () => {
       vscode.postMessage({ type: 'openReadme' });
-    });
-  }
-
-  if (selAgent) {
-    selAgent.addEventListener('change', () => {
-      vscode.postMessage({ type: 'setLifersModel', model: selAgent.value });
     });
   }
 

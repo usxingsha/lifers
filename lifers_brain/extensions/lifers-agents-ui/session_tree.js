@@ -4,6 +4,28 @@
  * Loaded by extension.js via require('./session_tree.js').
  */
 const vscode = require('vscode');
+const path = require('path');
+const fs = require('fs');
+
+/**
+ * @param {vscode.Uri} extensionUri
+ * @param {any} session
+ */
+function resolveSessionBrandIcon(extensionUri, session) {
+  const conf = vscode.workspace.getConfiguration('lifers');
+  const mode = conf.get('brandIconMode') || 'alternate';
+  const kitten = vscode.Uri.joinPath(extensionUri, 'media', 'icon.png');
+  const phoenixFs = path.join(extensionUri.fsPath, 'media', 'phoenix-void.png');
+  const phoenix = fs.existsSync(phoenixFs) ? vscode.Uri.joinPath(extensionUri, 'media', 'phoenix-void.png') : kitten;
+  if (mode === 'kitten') return kitten;
+  if (mode === 'phoenix') return phoenix;
+  let h = 0;
+  const id = session.id || '';
+  for (let i = 0; i < id.length; i++) {
+    h = (h + id.charCodeAt(i)) % 997;
+  }
+  return h % 2 === 0 ? kitten : phoenix;
+}
 
 /**
  * @param {any[]} sessions
@@ -37,7 +59,7 @@ function sessionMetaLine(s) {
     chars += (m.content || '').length;
   });
   const ctxN = (s.contextFiles || []).length;
-  return '+' + chars.toLocaleString('en-US') + ' · ' + ctxN + ' file' + (ctxN === 1 ? '' : 's');
+  return '+' + chars.toLocaleString('en-US') + ' chars · ' + ctxN + ' file' + (ctxN === 1 ? '' : 's');
 }
 
 class LifersSectionTreeItem extends vscode.TreeItem {
@@ -60,14 +82,15 @@ class LifersSessionTreeItem extends vscode.TreeItem {
   /**
    * @param {any} session
    * @param {boolean} isActive
+   * @param {vscode.Uri} extensionUri
    */
-  constructor(session, isActive) {
-    super(session.title || '(untitled)', vscode.TreeItemCollapsibleState.None);
+  constructor(session, isActive, extensionUri) {
+    super((isActive ? '● ' : '') + (session.title || '(untitled)'), vscode.TreeItemCollapsibleState.None);
     this.sessionId = session.id;
     this.contextValue = isActive ? 'lifersSessionActive' : 'lifersSession';
     this.id = `lifers-sess-${session.id}`;
     this.description = sessionMetaLine(session);
-    this.iconPath = isActive ? new vscode.ThemeIcon('debug-stackframe-focused') : new vscode.ThemeIcon('circle-outline');
+    this.iconPath = resolveSessionBrandIcon(extensionUri, session);
     this.command = {
       command: 'lifers.agents.activateSession',
       title: '切换会话',
@@ -139,7 +162,8 @@ class LifersSessionTreeProvider {
     }
 
     if (element instanceof LifersSectionTreeItem) {
-      return element.sessions.map((s) => new LifersSessionTreeItem(s, s.id === activeId));
+      const extUri = this._c.extensionUri;
+      return element.sessions.map((s) => new LifersSessionTreeItem(s, s.id === activeId, extUri));
     }
 
     return [];

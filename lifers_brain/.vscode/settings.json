@@ -1,7 +1,7 @@
 {
   "workbench.startupEditor": "readme",
   "lifers.pythonPath": "python",
-  "lifers.model": "transformer",
+  "lifers.model": "lifers",
   "lifers.sandbox": false,
   "lifers.remoteChat": false,
   "lifers.gateAutoStart": true,
@@ -28,8 +28,8 @@
   "terminal.integrated.env.windows": {
     "LIFERS_ROOT": "${workspaceFolder}",
     "PYTHONUTF8": "1",
-    "SANDBOX": "1",
-    "MODEL": "transformer"
+    "SANDBOX": "0",
+    "MODEL": "lifers"
   },
   "terminal.integrated.env.linux": {
     "LIFERS_ROOT": "${workspaceFolder}",

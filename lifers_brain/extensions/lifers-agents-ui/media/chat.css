@@ -399,6 +399,15 @@ body {
   color: var(--vscode-descriptionForeground);
 }
 
+.lifers-model-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--vscode-editor-background);
+  color: var(--vscode-foreground);
+}
+
 .toolbar-select {
   appearance: none;
   padding: 4px 22px 4px 6px;

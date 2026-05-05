@@ -2,7 +2,7 @@
   "name": "lifers-agents-ui",
   "displayName": "Lifers Agents Window",
   "description": "Lifers：Agents Chat + 会话建立（侧栏/资源管理器/底部总控）+ Kali 算力总控",
-  "version": "0.5.10",
+  "version": "0.5.13",
   "publisher": "lifers",
   "engines": {
     "vscode": "^1.85.0"
@@ -32,9 +32,9 @@
         },
         "lifers.model": {
           "type": "string",
-          "enum": ["lifers", "transformer", "markov"],
+          "enum": ["lifers"],
           "default": "lifers",
-          "description": "本地模型（MODEL）：lifers 与 transformer 同一套权重；markov 为字符级。"
+          "description": "固定为 lifers（与 stack.brain.model 一致）。推理用 weights/lifers_transformer.json。"
         },
         "lifers.sandbox": {
           "type": "boolean",
@@ -49,22 +49,22 @@
         "lifers.remoteChat": {
           "type": "boolean",
           "default": false,
-          "description": "true 时 Bridge 注入 LIFERS_REMOTE_CHAT（需密钥）。默认 false：仅用本地/Kali 权重。若用 stack.remote_infer，还须环境变量 LIFERS_ALLOW_REMOTE_INFER=1。"
+          "description": "保留项：扩展已向 Bridge 注入 LIFERS_FORCE_LOCAL_ONLY，Agents Chat 不走云端 chat/completions，无需 NVIDIA 等 API 密钥。联网检索用 lifers.sandbox=false + web_search。若你在终端手动跑 Python 且自行取消 FORCE_LOCAL，才可配合 stack.remote_infer（高级）。"
         },
         "lifers.chatApiUrl": {
           "type": "string",
           "default": "https://integrate.api.nvidia.com/v1/chat/completions",
-          "description": "远程 chat/completions 完整 URL（NVIDIA Integrate 默认同上）。"
+          "description": "（扩展默认不启用远程 Chat）仅手动终端调试远程 completions 时参考。"
         },
         "lifers.chatModel": {
           "type": "string",
           "default": "meta/llama-3.1-8b-instruct",
-          "description": "Integrate 模型 id（可按控制台可用列表替换）。"
+          "description": "（扩展默认不启用远程 Chat）同上。"
         },
         "lifers.chatApiKeyEnv": {
           "type": "string",
           "default": "NVIDIA_API_KEY",
-          "description": "仅填环境变量名字符串（如 NVIDIA_API_KEY），勿填 nvapi-… 密钥本体；密钥只在系统环境或 secrets.env。"
+          "description": "（扩展默认不要求密钥）远程 Chat 高级用法时的环境变量名占位。"
         },
         "lifers.openChatOnStartup": {
           "type": "boolean",
@@ -174,6 +174,19 @@
           "minimum": 1024,
           "maximum": 65535,
           "description": "lifers_gate HTTP 端口（与 Python 默认一致）。"
+        },
+        "lifers.brandIconMode": {
+          "type": "string",
+          "enum": ["alternate", "kitten", "phoenix"],
+          "default": "alternate",
+          "description": "品牌图：小猫与凤凰轮换（Webview 内按周期切换），或固定其一。侧栏「会话建立」在 alternate 下按会话 id 稳定分配两种图。"
+        },
+        "lifers.brandIconAlternateSeconds": {
+          "type": "number",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 120,
+          "description": "brandIconMode=alternate 时，Agents Chat / Agents / 总控 Webview 内图标轮换周期（秒）。"
         }
       }
     },

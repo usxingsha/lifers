@@ -117,7 +117,7 @@
 - **漂移检测**：**`python scripts/lifers_verify_config.py`**；或在进程环境里 **`LIFERS_CHECK_OPENCLAW=1`**，校验远端 release 与锚点是否一致（不一致会得到告警文案）。
 - **边界复述**：网关/频道/托管模型/OpenClaw Skills **不属于**本 Python 进程；云 API **仅限** `remote_infer` + 环境变量密钥；本地权重与 **`lifers_brain.tools`** 才是本仓库实现面。
 - **OpenClaw 上游源码**：推荐 **`git submodule update --init --depth 1`**（仓库根含 **`.gitmodules`**）。或在便携根（目录 **`lifers`**）执行 **`scripts/vendor_openclaw_reference.ps1`** / **`lifers_brain/scripts/vendor_openclaw_reference.sh`**（会优先子模块再浅克隆）。对照 **`openclaw_manifest.json`** 与 **`config/openclaw_upstream_vendor.json`**，不跑 `npm` 构建。
-- **claw-code/rust（Rust workspace）并入**：完整源码在便携根 **`third_party/claw_code_rust`**（来自 Kali **`~/claw-code/rust`**，排除 `target` 与会话缓存）；清单 **`config/claw_code_rust_vendor.json`**，审计说明 **`third_party/claw_code_rust/LIFERS_MERGE.md`**。内含 **`crates/api`** 等仅为 **vendor 对照**，**不在 Lifers Python 进程内**启用其网关或把云 API 写入 **`stack.brain`**（与 §10 第一条一致）。**`package_rs_for_kali.ps1`** 仅打包 **`lifers_brain/`**，若 Kali 也需同目录请 **`scp`/`rsync`** **`third_party/claw_code_rust`**。
+- **claw-code/rust（Rust workspace）并入**：完整源码在便携根 **`third_party/claw_code_rust`**；Kali 上权威对照路径为 **`~/lifers/third_party/claw-code/rust`**（排除 `target` 与会话缓存）；清单 **`config/claw_code_rust_vendor.json`**，审计说明 **`third_party/claw_code_rust/LIFERS_MERGE.md`**。内含 **`crates/api`** 等仅为 **vendor 对照**，**不在 Lifers Python 进程内**启用其网关或把云 API 写入 **`stack.brain`**（与 §10 第一条一致）。Windows→Kali 整仓同步用 **`lifers_brain/scripts/push_brain_and_loop_kali.ps1`**（内部调用 **`package_rs_for_kali.ps1`**，自仓库根打包）。
 
 ## 11. 工作区 `rs0` 与自定义多根
 

@@ -2,14 +2,14 @@
 
 ## 定位
 
-- **主仓**：Lifers 便携根（目录名 **`lifers/`**，与 GitHub 一致）；本目录为 **vendor 源码树**，以 Kali 上 `~/claw-code/rust` 为权威来源做合并。
+- **主仓**：Lifers 便携根（目录名 **`lifers/`**，与 GitHub 一致）；本目录为 **vendor 源码树**，以 Kali 上 `~/lifers/third_party/claw-code/rust` 为权威对照做合并。
 - **非产品运行时**：合并内容为 **文档 + Cargo 工作区 + crates 源码 + 脚本/校验清单**，**不**在 Lifers 进程内启用 claw-code 的 HTTP/API 网关、亦不将其云调用接入 `stack.brain`（与 `openclaw_manifest.json` 中「无云 API」约束一致）。
 
 ## 权威路径与打包
 
 | 项 | 值 |
 |----|-----|
-| Kali 源路径 | `/home/kali/claw-code/rust` |
+| Kali 源路径 | `/home/kali/lifers/third_party/claw-code/rust` |
 | Lifers 相对路径 | `third_party/claw_code_rust/`（便携根目录名 **`lifers`**） |
 | 传输包 | `lifers_brain/dist/claw_rust_merged.tgz`（由 Kali 端 `tar`，排除见下） |
 | SHA256（传输包） | `01970698c68355bda3dfa16f052537f892ca308d69e3e47ac02c68e0ed92005e` |
@@ -46,7 +46,7 @@
 
 ## 再同步步骤（维护者）
 
-1. Kali：`cd ~/claw-code/rust && tar czf /tmp/claw_rust_merged.tgz --exclude=./target --exclude='./.claw/sessions' --exclude='./.claude/sessions' .`
+1. Kali：`cd ~/lifers/third_party/claw-code/rust && tar czf /tmp/claw_rust_merged.tgz --exclude=./target --exclude='./.claw/sessions' --exclude='./.claude/sessions' .`
 2. Windows：`scp kali:/tmp/claw_rust_merged.tgz lifers/lifers_brain/dist/`（便携根目录名为 **`lifers`**）
 3. 清空并解压到 `lifers/third_party/claw_code_rust/`；删除 `.sandbox-home/`（若出现）。
 4. 更新 `claw_code_rust_vendor.json` 中的 `merged_at`、`source_file_count_*`、`bundle_sha256`。

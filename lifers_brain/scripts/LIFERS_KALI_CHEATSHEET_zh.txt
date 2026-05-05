@@ -12,6 +12,15 @@ Lifers Kali — 一页速查（跟着跑）
   weights/.train_status.json 只有 **新版训练在跑/跑过** 才会生成；旧目录或训练未写入前 cat 会报「没有那个文件」。
   zsh 报 corrupt history：mv ~/.zsh_history ~/.zsh_history.bad; touch ~/.zsh_history
   若旧日志还在家目录根（~/lifers_full_stack.log 等）：bash scripts/kali_normalize_lifers_layout.sh 收拢到 ~/lifers/
+  ~/claw-code 若在且为 root 所有：脚本会 rsync 到 ~/lifers/third_party/claw-code/；删原目录需：sudo rm -rf ~/claw-code  再  sudo chown -R kali:kali ~/lifers/third_party/claw-code
+
+【布局收拢后继续训练 / 权重】（均在 kali 用户、目录 /home/kali/lifers/lifers_brain）
+  bash scripts/kali_normalize_lifers_layout.sh
+  bash scripts/lifers_train_ctl.sh run
+  bash scripts/remote_kali_bootstrap_train_loop.sh
+  # 若 tmux 里已有会话只想续跑、跳过 Markov：LIFERS_BOOTSTRAP_SKIP_MARKOV=1 bash scripts/remote_kali_bootstrap_train_loop.sh
+  python3 scripts/show_train_progress.py
+  tail -f ~/lifers/lifers_full_stack.log
 
 【现在就该会的】
   tmux attach -t lifers-stack          看训练画面

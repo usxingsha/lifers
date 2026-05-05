@@ -98,7 +98,7 @@
     "vendor_path": "third_party/claw_code_rust",
     "manifest": "lifers_brain/config/claw_code_rust_vendor.json",
     "merge_notes": "third_party/claw_code_rust/LIFERS_MERGE.md",
-    "note": "CN: Kali ~/claw-code/rust 并入源码树；无进程内 API 运行时。 | EN: Full Rust workspace vendored; no in-process API gateway."
+    "note": "CN: Kali ~/lifers/third_party/claw-code/rust 为权威对照；vendor 在 third_party/claw_code_rust；无进程内 API 运行时。 | EN: Rust workspace vendored; no in-process API gateway."
   },
   "cursor": {
     "mode": "offline_declarative",

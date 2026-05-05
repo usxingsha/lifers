@@ -19,7 +19,7 @@ git submodule update --init --depth 1
 | 路径 | 说明 |
 |------|------|
 | `third_party/openclaw` | `openclaw/openclaw` 子模块；能力域见 `lifers_brain/config/openclaw_manifest.json` |
-| `third_party/claw_code_rust` | Kali **claw-code/rust** 并入；见 `lifers_brain/config/claw_code_rust_vendor.json` |
+| `third_party/claw_code_rust` | 以 Kali **`~/lifers/third_party/claw-code/rust`** 为权威对照；见 `lifers_brain/config/claw_code_rust_vendor.json` |
 | `lifers_brain/config/lifers_vendor_map.json` | 总表与策略（以 Lifers 为主） |
 
 不在此仓库进程内安装或启动 OpenClaw / claw-code 网关；云 API 不入 `stack.brain`。

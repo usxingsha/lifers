@@ -4,9 +4,9 @@
   "path_relative_to_portable_root": "third_party/claw_code_rust",
   "source_authoritative": {
     "host": "kali",
-    "path": "/home/kali/claw-code/rust",
+    "path": "/home/kali/lifers/third_party/claw-code/rust",
     "workspace_members_glob": "crates/*",
-    "note_zh": "Lifers 打包与运行时以 third_party/claw_code_rust 为准；~/claw-code 仅为历史或对照检出，不必再复制进 lifers 根目录。"
+    "note_zh": "权威对照路径已收拢到 ~/lifers/third_party/claw-code/rust；third_party/claw_code_rust 为并入本仓的 vendor 树。"
   },
   "bundle": {
     "relative_path": "lifers_brain/dist/claw_rust_merged.tgz",

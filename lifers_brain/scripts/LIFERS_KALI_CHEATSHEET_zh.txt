@@ -6,10 +6,16 @@ Lifers Kali — 一页速查（跟着跑）
   若终端提示符是 root@kali，则 **~ 是 /root**，~/lifers/... 常不存在 → 请：
     cd /home/kali/lifers/lifers_brain
   或先：su - kali
-  若提示「找不到 show_train_progress.py」：本机仓库未同步到这份路径 → 在 Windows 跑
-    lifers_brain\scripts\push_brain_and_loop_kali.ps1
-  或在 Kali（kali 用户）里：git -C /home/kali/lifers pull
-  weights/.train_status.json 只有 **新版训练在跑/跑过** 才会生成；旧目录或训练未写入前 cat 会报「没有那个文件」。
+  若提示「找不到 show_train_progress.py」：Kali 上仍是**旧解压树**，或从未用**新版** tar 覆盖过。
+  **为何 git pull 一定失败**：Windows 打包脚本 **排除了 .git**（避免把整仓库打进包），解压到 ~/lifers 后 **本来就不是 git 仓库**，
+    对 /home/kali/lifers 执行 git pull 会报「不是 git 仓库」——与用 root 还是 kali 无关。
+  **正确更新代码**（唯一稳路径）：在 Windows 进入 lifers 仓库里的 lifers_brain\scripts，执行：
+    powershell -File .\push_brain_and_loop_kali.ps1
+  只覆盖文件、暂不自动启远端循环：加 -SkipBootstrap（仍会 ssh 解压覆盖 lifers_brain）。
+  weights/.train_status.json 只有 **带 train_status 写入逻辑的新代码在训/训过** 才会有；旧树或尚未写入前 cat 会报「没有那个文件」。
+
+【zsh 提示 corrupt history】（与 Lifers 无关，但会刷屏）
+  mv ~/.zsh_history ~/.zsh_history.bad; touch ~/.zsh_history; exec zsh
 
 【现在就该会的】
   tmux attach -t lifers-stack          看训练画面

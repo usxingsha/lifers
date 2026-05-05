@@ -36,6 +36,7 @@ finally {
 }
 
 Write-Host "Wrote $Out"
+Write-Host "Note: tarball has no .git — on Kali use push_brain_and_loop_kali.ps1 to refresh; do not git pull in ~/lifers."
 Write-Host "Kali 示例:"
 Write-Host "  mkdir -p ~/lifers && tar -xzf lifers_kali.tar.gz -C ~/lifers"
 Write-Host "  cd ~/lifers/$Leaf && bash scripts/kali_train_weights.sh"

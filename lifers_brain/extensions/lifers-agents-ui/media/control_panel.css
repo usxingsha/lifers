@@ -40,6 +40,45 @@ button.secondary {
   margin: 0 0 10px;
   line-height: 1.45;
 }
+.train-live {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  background: var(--vscode-editor-background);
+}
+.train-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.train-row:last-of-type {
+  margin-bottom: 4px;
+}
+.train-lbl {
+  width: 88px;
+  flex-shrink: 0;
+  font-size: 0.92em;
+  opacity: 0.9;
+}
+.train-row progress {
+  flex: 1;
+  height: 10px;
+}
+.train-pct {
+  width: 42px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.92em;
+}
+.train-meta {
+  font-size: 0.85em;
+  opacity: 0.85;
+  line-height: 1.35;
+  margin-top: 4px;
+}
+
 #out {
   width: 100%;
   min-height: 180px;

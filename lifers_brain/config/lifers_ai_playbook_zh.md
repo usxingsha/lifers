@@ -128,7 +128,7 @@
 ## 12. 双机（Windows ↔ Kali）智脑同步
 
 - **代码与配置**：Windows 侧 **`lifers_brain/scripts/push_brain_and_loop_kali.ps1`** 打包（默认不含 `weights/`、`config/secrets.env`）并解压到 Kali `~/lifers/`。
-- **密钥**：**`NVIDIA_API_KEY`** 等在**各机**用户环境或本机 **`config/secrets.env`**（勿提交）；不要在聊天或仓库明文共享。
+- **密钥（仅可选云端 Chat）**：Agents Chat 默认 **不需要**；若你自行在终端启用 `remote_infer` 且未设 `LIFERS_FORCE_LOCAL_ONLY`，才用 **`NVIDIA_API_KEY`** 等环境变量或 **`config/secrets.env`**（勿提交）。
 - **对齐检查**：两端均可 **`python scripts/lifers_verify_config.py`**；**`stack.json`、`lifers_ai_playbook_zh.md`、`openclaw_manifest.json`** 应随推送保持一致。
 - **训练「控制没反应」**：若 **`weights/.train_control`** 为 **run** 但无 **`train_lifers_escalate.py` 进程**，常见原因是 **tmux `lifers-stack` 空壳**（会话在、循环已退出）。处理：在 Kali brain 目录执行 **`bash scripts/remote_kali_bootstrap_train_loop.sh`**（已支持：**无训练进程则自动 kill 会话并重建**）。仅重启 escalate、不重跑 Markov：**`export LIFERS_BOOTSTRAP_SKIP_MARKOV=1`** 再执行上述脚本。
 

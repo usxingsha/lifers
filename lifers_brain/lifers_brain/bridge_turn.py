@@ -24,6 +24,33 @@ def _safe_read_under_root(root: Path, rel: str, max_chars: int = 6000) -> str:
         return ""
 
 
+def _strip_api_key_nag_when_local_only(reply: str) -> str:
+    """Agents Chat 已强制本地时，去掉模型复述的「须配 NVIDIA 密钥」类段落。"""
+    if os.environ.get("LIFERS_FORCE_LOCAL_ONLY", "").strip().lower() not in ("1", "true", "yes", "on"):
+        return reply
+    if not reply or not reply.strip():
+        return reply
+    needles = (
+        "NVIDIA_API_KEY",
+        "LIFERS_CHAT_API_KEY",
+        "未检测到 API 密钥",
+        "未检测到API密钥",
+        "未检测到 NVIDIA",
+    )
+    lines = reply.split("\n")
+    kept: list[str] = []
+    for ln in lines:
+        if any(n in ln for n in needles):
+            continue
+        if "远程推理" in ln and "密钥" in ln:
+            continue
+        if "云端" in ln and "密钥" in ln and ("须" in ln or "必须" in ln or "请设置" in ln):
+            continue
+        kept.append(ln)
+    out = "\n".join(kept).strip()
+    return out if out else reply
+
+
 def lifers_turn(root: Path, text: str, context_files: List[Any]) -> Dict[str, Any]:
     """
     Run one LifersAgent step. Returns {"ok": bool, "text": str, "error": optional str}.
@@ -65,6 +92,7 @@ def lifers_turn(root: Path, text: str, context_files: List[Any]) -> Dict[str, An
         print("LIFERS_PROGRESS bridge LifersAgent.step 开始 …", file=sys.stderr, flush=True)
         use_tf = os.environ.get("LIFERS_TASKFLOW", "1").strip().lower() not in ("0", "false", "no", "off")
         reply = run_lifers_turn(agent, full) if use_tf else agent.step(full)
+        reply = _strip_api_key_nag_when_local_only(reply)
         return {"ok": True, "text": reply}
     except Exception as e:
         return {"ok": False, "text": "", "error": str(e)}

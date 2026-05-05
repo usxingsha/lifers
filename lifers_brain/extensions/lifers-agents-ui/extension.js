@@ -494,6 +494,7 @@ class LifersControlPanelViewProvider {
     };
     webviewView.webview.html = this._c.getControlPanelHtml(webviewView.webview);
     webviewView.webview.onDidReceiveMessage((msg) => this._c.handleControlPanelMessage(msg));
+    webviewView.onDidDispose(() => this._c.stopTrainProgressPoll());
   }
 }
 
@@ -515,6 +516,10 @@ class LifersAgentsController {
     this._defaultSessionEnsured = false;
     /** @type {import('./session_tree.js').LifersSessionTreeProvider | undefined} */
     this._sessionTreeProvider = undefined;
+    /** @type {ReturnType<typeof setInterval> | undefined} */
+    this._trainPollHandle = undefined;
+    /** @type {vscode.WebviewView | undefined} */
+    this._trainPollView = undefined;
   }
 
   /** @param {import('./session_tree.js').LifersSessionTreeProvider | undefined} p */
@@ -600,6 +605,59 @@ class LifersAgentsController {
   /** @param {vscode.WebviewView | undefined} v */
   setControlPanelView(v) {
     this._controlView = v;
+  }
+
+  startTrainProgressPoll(view) {
+    this.stopTrainProgressPoll();
+    this._trainPollView = view;
+    void this._pollTrainProgressOnce();
+    this._trainPollHandle = setInterval(() => void this._pollTrainProgressOnce(), 4000);
+  }
+
+  stopTrainProgressPoll() {
+    if (this._trainPollHandle) {
+      clearInterval(this._trainPollHandle);
+      this._trainPollHandle = undefined;
+    }
+    this._trainPollView = undefined;
+  }
+
+  async _pollTrainProgressOnce() {
+    const wv = this._trainPollView?.webview;
+    if (!wv) return;
+    const data = await this._remoteTrainStatusJson();
+    try {
+      wv.postMessage({ type: 'trainProgress', data });
+    } catch {
+      /* webview disposed */
+    }
+  }
+
+  async _remoteTrainStatusJson() {
+    const conf = vscode.workspace.getConfiguration('lifers');
+    const ssh = String(conf.get('kaliSshPrefix') || 'ssh -o BatchMode=yes -o ConnectTimeout=12 kali@192.168.234.152').trim();
+    const bp = String(conf.get('kaliBrainPath') || '/home/kali/lifers/lifers_brain').trim();
+    const br = JSON.stringify(bp);
+    const inner = [`BR=${br}`, `test -f "$BR/weights/.train_status.json" || { echo "{}"; exit 0; }`, `cat "$BR/weights/.train_status.json"`].join(
+      '; '
+    );
+    const cmd = `${ssh} bash -lc ${JSON.stringify(inner)}`;
+    const r = await execShell(cmd, { timeout: 20000 });
+    const raw = (r.stdout || '').trim();
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      const m = raw.match(/\{[\s\S]*\}/);
+      if (m) {
+        try {
+          return JSON.parse(m[0]);
+        } catch {
+          /* fall through */
+        }
+      }
+      return { _parse_error: true, _raw: raw.slice(0, 400) };
+    }
   }
 
   async openTotalControlPanel() {
@@ -1165,6 +1223,11 @@ class LifersAgentsController {
     <h1><img class="lifers-brand-img cp-brand-img" src="${iconUri}" width="22" height="22" alt="" /> Lifers 总控（Kali 算力 + 同步）</h1>
     <p class="hint">依赖本机 <code>ssh</code>；路径在设置 <code>lifers.kaliSshPrefix</code>、<code>lifers.kaliBrainPath</code>。
     底部同一栏另有「会话建立」树。物化闭环在仓库：<code>scripts/embodied_tick_once.py</code> + <code>stack.embodied_world</code>（先 pause 再同步）。</p>
+    <div id="train-live" class="train-live" aria-live="polite">
+      <div class="train-row"><span class="train-lbl">总进度(估)</span><progress id="p-overall" max="100" value="0"></progress><span id="t-overall" class="train-pct">—</span></div>
+      <div class="train-row"><span class="train-lbl">SGD 本档</span><progress id="p-sgd" max="100" value="0"></progress><span id="t-sgd" class="train-pct">—</span></div>
+      <div id="train-meta" class="train-meta">等待 SSH 数据…</div>
+    </div>
     <div class="row">
       <button type="button" id="btn-status">状态</button>
       <button type="button" class="secondary" id="btn-pause">暂停训练</button>
@@ -1190,7 +1253,8 @@ class LifersAgentsController {
       return;
     }
     if (msg.type === 'controlReady') {
-      post('就绪。先点「状态」确认 SSH；暂停会在合适检查点由远端 train 脚本处理（需已部署新版）。');
+      post('就绪。点「状态」测 SSH；下方进度条每 4s 读 Kali 的 weights/.train_status.json。');
+      this.startTrainProgressPoll(this._controlView);
       return;
     }
     if (msg.type !== 'controlAction') return;

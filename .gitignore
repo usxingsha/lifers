@@ -14,6 +14,9 @@
 # 大权重：从 Kali 拉取，勿入版本库（见 lifers_brain/scripts/sync_weights_from_kali.ps1）
 /lifers_brain/weights/lifers_transformer.json
 
+# 每日 AI 健康报告（本地/计划任务生成）
+/lifers_brain/state/daily_health/
+
 # 会话侧本地状态
 /lifers_brain/.lifers/
 

@@ -19,6 +19,8 @@ Python 包名 **`lifers_brain`**；便携仓库根目录历史上曾名 **`rs`**
 
 **训练吃满 CPU（Kali 上常仅 ~20–30%）**：`train_sgd` 的纯 Python 列表实现是**单核**的；安装 **NumPy** 后（`pip install numpy` 或 `apt install python3-numpy`）同一代码会走 **NumPy/BLAS 前向**（`transformer_lm.py`），再设 **`export OMP_NUM_THREADS=$(nproc)`**（或 `OPENBLAS_NUM_THREADS`）以用满多核。显式关闭加速路径：`LIFERS_USE_NUMPY=0`。
 
+**每日 AI 健康与自动纠偏（本地）**：`python eval/daily_ai_health.py`（或 `scripts/run_daily_ai_health.ps1` / `scripts/run_daily_ai_health.sh`）汇总 **eval 套件（逻辑/格式/一致性代理）**、**`eval/full_system_check.py` 全链**、**桥接延迟**、**多文件上下文吞吐**（`LIFERS_CONTEXT_MAX_FILES` 扫描），报告写入 **`state/daily_health/latest.json`**（目录已 gitignore）。可选 **`LIFERS_DAILY_HEALTH_AUTO_REMEDIATE=1`**：仅在检查通过且负载偏高时，把 **`lifers.contextMaxFiles` / `lifers.bridgeContextMaxFiles` / `lifers.bridgeTimeoutMs`** 合并进 **`config/workspace_custom.json`**（已忽略提交）并尝试运行 **`tools/materialize_integrated_workspace.py`**。
+
 **布局（v0.4.5+）**：**Agents Chat** 在**中间编辑器**；**会话建立**（会话树）在**左侧活动栏 → Lifers** 下，与 **Agents** 启动器同栏（不再依赖 Secondary Side Bar）。命令：**Lifers: 打开 Agents Chat**、**Lifers: 显示会话建立**。**上下文**：**Lifers: 添加上下文文件**、**Lifers: 添加目录为上下文**（递归收集文件路径，受设置 `lifers.*` 限制）。
 
 **Kali 训练权重**：`scripts/package_rs_for_kali.ps1` → `dist/lifers_kali.tar.gz`；在 Kali 上解压后跑 **`scripts/kali_install_full_train.sh`**（默认 `full` + 名义 **`LIFERS_TARGET_PARAM_B=20`** 的渐进放大，遇 **OOM** 停止；产物 **`weights/lifers_*.json`**）。详见 **`scripts/KALI_WEIGHTS.md`**。  

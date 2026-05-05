@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "upstream_repo": "openclaw/openclaw",
+  "last_synced_tag": null,
+  "last_synced_at_ms": null,
+  "compat_note": "Mirrors upstream capability taxonomy into Lifers only (no OpenClaw runtime). Run sync_openclaw_release.py to bump compat_ref; extend integration_domains when upstream adds major surfaces.",
+  "integration_domains": [
+    {
+      "id": "gateway",
+      "openclaw": "Gateway WebSocket 控制面、sessions、presence、doctor/gateway CLI",
+      "lifers": "不使用；与本仓库 Agent 并行，互不重复配置"
+    },
+    {
+      "id": "channels",
+      "openclaw": "多频道收件箱（各类 IM/协作通道）与路由规则",
+      "lifers": "不承担；频道密钥与账号仅在 OpenClaw 工作区"
+    },
+    {
+      "id": "providers",
+      "openclaw": "托管/本地模型发现、Provider 与路由、onboard 模型选择",
+      "lifers": "仅 stack.brain 的本地权重与 MODEL/SANDBOX；勿在此写云 API"
+    },
+    {
+      "id": "skills",
+      "openclaw": "Skills/扩展、ClawdHub、MCP 等生态入口",
+      "lifers": "Python 工具注册表在 lifers_brain.tools；不复制 OpenClaw 插件清单"
+    },
+    {
+      "id": "canvas_cron",
+      "openclaw": "Live Canvas、Cron/Webhooks、自动化触发",
+      "lifers": "本能层 instincts 与 audit；不与 OpenClaw Canvas 混配"
+    },
+    {
+      "id": "voice_migration",
+      "openclaw": "语音唤醒/对话模式、migrate/onboard 导入 CLI",
+      "lifers": "三合一 runtime；机器人传感执行仍走 robot.*_exec_cmd"
+    },
+    {
+      "id": "claw_code_rust",
+      "openclaw": "（非 npm OpenClaw）claw-code Rust workspace：crates/api、runtime、rusty-claude-cli、telemetry、plugins 等",
+      "lifers": "vendor 于 rs/third_party/claw_code_rust（清单 claw_code_rust_vendor.json）；仅源码与文档并入；进程内不启用其网关/API 运行时，不把云调用写入 stack.brain"
+    }
+  ],
+  "extra_hints": "回答用户关于 OpenClaw 时须区分：(1) 上游产品常见形态（网关、频道、Skills、Canvas）；(2) 本仓库仅 mirror 到清单与 compat_ref，进程内不跑 OpenClaw。OpenClaw 上游源码：rs/third_party/openclaw 为 **git 子模块**（见 .gitmodules、config/openclaw_upstream_vendor.json；克隆后执行 `git submodule update --init --depth 1`）。claw-code/rust：rs/third_party/claw_code_rust（config/claw_code_rust_vendor.json、LIFERS_MERGE.md）。总表：config/lifers_vendor_map.json。含 crates/api 等仅为审计对照。对齐标签：python scripts/sync_openclaw_release.py（代理设 LIFERS_HTTP_DIRECT=1）。双机：同 stack/playbook；secrets.env 勿提交。自检：lifers_verify_config.py。禁止把云 API 写入 stack.brain。"
+}

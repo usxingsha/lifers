@@ -1,0 +1,48 @@
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--vscode-font-family), system-ui, sans-serif;
+  font-size: 12px;
+  color: var(--vscode-sideBar-foreground);
+  background: var(--vscode-sideBar-background);
+}
+
+.launcher-root {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.launcher-hint {
+  margin: 0;
+  line-height: 1.45;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+}
+
+.launcher-btn {
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.launcher-btn.secondary {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+
+.launcher-btn:hover {
+  filter: brightness(1.08);
+}

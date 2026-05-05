@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "role": "vendor_source_audit",
+  "path_relative_to_rs": "third_party/claw_code_rust",
+  "source_authoritative": {
+    "host": "kali",
+    "path": "/home/kali/claw-code/rust",
+    "workspace_members_glob": "crates/*"
+  },
+  "bundle": {
+    "relative_path": "lifers_brain/dist/claw_rust_merged.tgz",
+    "sha256": "01970698c68355bda3dfa16f052537f892ca308d69e3e47ac02c68e0ed92005e",
+    "excludes": [
+      "target/",
+      ".claw/sessions/",
+      ".claude/sessions/"
+    ]
+  },
+  "merged_at": "2026-05-04",
+  "completeness": {
+    "definition": "File-level parity with Kali tree after excluding target, git, session caches, and .sandbox-home; not line-percent.",
+    "source_file_count_kali_same_excludes": 111,
+    "vendor_file_count_after_extract_remove_sandbox_home": 112,
+    "vendor_file_count_with_lifers_merge_doc": 113,
+    "approximate_coverage": "0.99"
+  },
+  "crates": [
+    "api",
+    "commands",
+    "compat-harness",
+    "mock-anthropic-service",
+    "plugins",
+    "runtime",
+    "rusty-claude-cli",
+    "telemetry",
+    "tools"
+  ],
+  "lifers_policy": {
+    "no_runtime_wiring": true,
+    "no_cloud_api_in_stack_brain": true,
+    "docs": [
+      "third_party/claw_code_rust/LIFERS_MERGE.md",
+      "lifers_brain/config/openclaw_manifest.json"
+    ]
+  }
+}

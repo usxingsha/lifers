@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "primary": "lifers",
+  "description": "CN: lifers 便携根（原 rs）：默认工作区见 workspace_settings；本机覆盖 config/workspace_custom.json（勿提交）。 | EN: Portable lifers root; defaults in workspace_settings; local overlay config/workspace_custom.json (do not commit).",
+  "philosophy": "CN: 默认多根首项为 ./rs0；第二根为整仓根「lifers」；智脑为 lifers_brain。由本文件物化 lifers.code-workspace（并写 rs.code-workspace 副本兼容）。 | EN: Folders: rs0, portable root, lifers_brain; materialize lifers.code-workspace + rs.code-workspace alias.",
+  "roots": [
+    {
+      "id": "rs0_workspace",
+      "name": "rs0",
+      "path": "./rs0",
+      "role": "workspace_default"
+    },
+    {
+      "id": "lifers_portable",
+      "name": "lifers",
+      "path": ".",
+      "role": "full_tree"
+    },
+    {
+      "id": "lifers_ai",
+      "name": "lifers_brain",
+      "path": "./lifers_brain",
+      "role": "brain",
+      "note": "工作区变量名与文件夹名一致：${workspaceFolder:lifers_brain}"
+    }
+  ],
+  "workspace_settings": {
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.wordWrap": "on",
+    "editor.minimap.enabled": true,
+    "editor.bracketPairColorization.enabled": true,
+    "editor.guides.bracketPairs": "active",
+    "editor.renderWhitespace": "selection",
+    "workbench.editor.enablePreview": false,
+    "explorer.confirmDelete": true,
+    "explorer.confirmDragAndDrop": true,
+    "files.exclude": {},
+    "files.autoGuessEncoding": true,
+    "files.trimTrailingWhitespace": false,
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/.venv": true,
+      "**/shell/**/node_modules": true
+    },
+    "files.watcherExclude": {
+      "**/.git/objects/**": true,
+      "**/node_modules/**": true,
+      "**/.venv/**": true
+    },
+    "explorer.excludeGitIgnore": false,
+    "search.useIgnoreFiles": true,
+    "terminal.integrated.scrollback": 8000,
+    "editor.unicodeHighlight.ambiguousCharacters": true,
+    "editor.unicodeHighlight.invisibleCharacters": true,
+    "cSpell.enabled": true,
+    "cSpell.language": "en,zh-CN",
+    "python.defaultInterpreterPath": "${workspaceFolder:lifers_brain}/.venv/Scripts/python.exe",
+    "python.analysis.extraPaths": ["${workspaceFolder:lifers_brain}"],
+    "python.terminal.activateEnvironment": true,
+    "lifers.pythonPath": "python",
+    "lifers.model": "lifers",
+    "lifers.sandbox": false,
+    "lifers.httpDirect": true,
+    "lifers.openChatOnStartup": true,
+    "lifers.openSessionSidebarOnStartup": true,
+    "lifers.autoCreateSessionOnStart": true,
+    "lifers.contextMaxFiles": 48,
+    "lifers.bridgeContextMaxFiles": 32,
+    "lifers.bridgeTimeoutMs": 600000,
+    "lifers.contextFolderMaxCollect": 96,
+    "lifers.contextFolderMaxDepth": 6,
+    "lifers.contextFolderSkipDirs": [
+      "node_modules",
+      ".git",
+      ".venv",
+      "__pycache__",
+      ".cursor",
+      "dist",
+      "build",
+      "target",
+      ".idea",
+      "shell"
+    ]
+  },
+  "openclaw": {
+    "mode": "upstream_tracking_only",
+    "config_source": "lifers_brain/config/stack.json#openclaw",
+    "manifest": "lifers_brain/config/openclaw_manifest.json",
+    "vendor_path": "third_party/openclaw",
+    "vendor_kind": "git_submodule",
+    "note": "CN: 上游以 .gitmodules 子模块呈现；仅清单对照，无运行时。 | EN: Upstream as submodule; manifest only; no runtime."
+  },
+  "claw_code_rust": {
+    "vendor_path": "third_party/claw_code_rust",
+    "manifest": "lifers_brain/config/claw_code_rust_vendor.json",
+    "merge_notes": "third_party/claw_code_rust/LIFERS_MERGE.md",
+    "note": "CN: Kali ~/claw-code/rust 并入源码树；无进程内 API 运行时。 | EN: Full Rust workspace vendored; no in-process API gateway."
+  },
+  "cursor": {
+    "mode": "offline_declarative",
+    "note": "CN: 便携壳 shell/Cursor；合并见 tools/sync_cursor_settings_to_vscodium.py | EN: Portable shell/Cursor; sync via tools/sync_cursor_settings_to_vscodium.py"
+  },
+  "constraints": [
+    "no_external_llm_api_in_lifers_portable_defaults",
+    "openclaw_reference_only_no_runtime_dependency",
+    "claw_code_rust_vendor_no_runtime_api_use_in_lifers_stack"
+  ],
+  "bootstrap": {
+    "on_agent_startup": true,
+    "steps": ["materialize_workspace", "prune_paths"],
+    "materialize_if_layout_newer_than": "lifers.code-workspace",
+    "remove_if_present": [],
+    "cli_deploy": "tools/bootstrap_lifers.ps1",
+    "cli_deploy_note": "CN: bootstrap_lifers.ps1 = materialize + run_integrated_bootstrap.py(prune) + install_agents + 推荐扩展 + sync_cursor_settings_to_vscodium + 可选 link_lifers_app + smoke | EN: Same pipeline; bootstrap_rs.ps1 forwards here."
+  },
+  "workspace_outputs": ["lifers.code-workspace", "rs.code-workspace"],
+  "workspace_custom_file": "config/workspace_custom.json",
+  "workspace_custom_example": "config/workspace_custom.example.json"
+}

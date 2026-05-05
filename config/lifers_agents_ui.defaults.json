@@ -1,0 +1,31 @@
+{
+  "_readme": "CN: 与 VS Code 工作区 settings 中 lifers.* 对齐的参考清单（扩展不读取本文件；实际生效以 lifers.code-workspace / integrated_layout 为准）。 | EN: Reference mirror of lifers.* workspace keys; extension uses VS Code settings only.",
+  "lifers.pythonPath": "python",
+  "lifers.model": "lifers",
+  "lifers.sandbox": false,
+  "lifers.httpDirect": true,
+  "lifers.remoteChat": true,
+  "lifers.chatApiUrl": "https://integrate.api.nvidia.com/v1/chat/completions",
+  "lifers.chatModel": "meta/llama-3.1-8b-instruct",
+  "lifers.chatApiKeyEnv": "NVIDIA_API_KEY",
+  "lifers.openChatOnStartup": true,
+  "lifers.openSessionSidebarOnStartup": true,
+  "lifers.autoCreateSessionOnStart": true,
+  "lifers.contextMaxFiles": 48,
+  "lifers.bridgeContextMaxFiles": 32,
+  "lifers.bridgeTimeoutMs": 600000,
+  "lifers.contextFolderMaxCollect": 96,
+  "lifers.contextFolderMaxDepth": 6,
+  "lifers.contextFolderSkipDirs": [
+    "node_modules",
+    ".git",
+    ".venv",
+    "__pycache__",
+    ".cursor",
+    "dist",
+    "build",
+    "target",
+    ".idea",
+    "shell"
+  ]
+}

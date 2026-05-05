@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "comment": "Ordered focus areas; each suite_dir is relative to lifers_brain root. Duplicate v001 until you add v002+ corpora.",
+  "tracks": [
+    {
+      "id": "programming",
+      "suite_dir": "eval/suites/v001",
+      "notes": "代码/工具/结构化任务 jsonl — 替换为你的编程语料目录"
+    },
+    {
+      "id": "dialogue",
+      "suite_dir": "eval/suites/v001",
+      "notes": "多轮中文闲聊 — 替换为对话 jsonl 目录"
+    },
+    {
+      "id": "tooling",
+      "suite_dir": "eval/suites/v001",
+      "notes": "任务流/工具调用描述"
+    },
+    {
+      "id": "retrieval",
+      "suite_dir": "eval/suites/v001",
+      "notes": "检索/摘要/引用式问答"
+    },
+    {
+      "id": "safety",
+      "suite_dir": "eval/suites/v001",
+      "notes": "拒答/红队/策略对齐样本"
+    }
+  ]
+}

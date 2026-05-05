@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+BR="${LIFERS_BRAIN:-/home/kali/lifers/lifers_brain}"
+mkdir -p "$BR/weights"
+echo run >"$BR/weights/.train_control"
+echo "OK_run $BR/weights/.train_control"

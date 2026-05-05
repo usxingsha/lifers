@@ -1,0 +1,39 @@
+{
+  "workbench.startupEditor": "readme",
+  "lifers.pythonPath": "python",
+  "lifers.model": "transformer",
+  "lifers.sandbox": false,
+  "lifers.remoteChat": true,
+  "lifers.httpDirect": true,
+  "lifers.chatApiKeyEnv": "NVIDIA_API_KEY",
+  "lifers.bridgeTimeoutMs": 600000,
+
+  "python.defaultInterpreterPath": "python",
+  "python.terminal.activateEnvironment": true,
+  "python.analysis.extraPaths": ["${workspaceFolder}"],
+  "python.analysis.diagnosticMode": "workspace",
+
+  "files.watcherExclude": {
+    "**/.venv/**": true,
+    "**/__pycache__/**": true,
+    "**/.git/objects/**": true
+  },
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true
+  },
+
+  "terminal.integrated.env.windows": {
+    "LIFERS_ROOT": "${workspaceFolder}",
+    "PYTHONUTF8": "1",
+    "SANDBOX": "1",
+    "MODEL": "transformer"
+  },
+  "terminal.integrated.env.linux": {
+    "LIFERS_ROOT": "${workspaceFolder}",
+    "PYTHONUTF8": "1"
+  },
+  "files.associations": {
+    "domains.json": "jsonc"
+  }
+}

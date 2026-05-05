@@ -1,0 +1,44 @@
+Lifers Kali — 一页速查（跟着跑）
+================================
+
+【现在就该会的】
+  tmux attach -t lifers-stack          看训练画面
+  tail -f ~/lifers_full_stack.log     看循环日志
+  cd ~/lifers/lifers_brain
+  bash scripts/lifers_train_ctl.sh pause   暂停（档位边界更安全）
+  bash scripts/lifers_train_ctl.sh run     继续
+  bash scripts/lifers_train_ctl.sh stop    停训（需再 run 才会进 escalate）
+
+【Windows 带代码跑】（不打断权重：tar 不含 weights/）
+  cd lifers_brain\scripts
+  powershell -File .\push_brain_and_loop_kali.ps1
+
+【停旧栈 + 备份主权重 + 若有 chunk 则合并进主文件】
+  bash scripts/remote_stop_old_merge_weights.sh
+  注意：只用 tmux kill-session -t lifers-train，不要 kill「tmux 父进程」PID，会干掉整个 tmux server。
+
+【多久算「正常用」】
+  · UI / 桥接 / 工具链：扩展装好 + Reload → 几分钟～十几分钟。
+  · 聊天像「大模型产品」：靠 stack.json → llm_ops 接外部 API；配好 key/网络 → 通常 1 小时内能日常用。
+  · 只靠本地 lifers_transformer.json：小字符 LM，训再久也难达 GPT 级；可观改善常要「数天～数周」增量，仍有天花板。
+
+【能力轮换语料】
+  python3 scripts/lifers_capability_queue.py show
+  python3 scripts/lifers_capability_queue.py env
+  python3 scripts/lifers_capability_queue.py advance
+
+【拷权重回 Windows】
+  scp kali@主机:~/lifers/lifers_brain/weights/lifers_transformer.json 本机 lifers_brain\weights\
+
+【自修复 stack】LIFERS_SELF_HEAL=1 默认开；缺键合并、坏 JSON 从模板恢复。
+【自改代码】往 state/self_code_queue/ 放 JSON：{"rel_path":"...","new_text":"..."}；SANDBOX=0；见 playbook §9.6
+
+【速度拉满（训练 / HTTP / 推理）】
+  export LIFERS_MAX_SPEED=1
+  # 可选细化：
+  # LIFERS_TRAIN_SAVE_EVERY=25          # 大权重复核 JSON 每 N 步写盘（默认 MAX_SPEED 下 auto）
+  # LIFERS_PAUSE_POLL_SEC=0.1           # pause 时轮询间隔
+  # LIFERS_LOOP_IDLE_SEC=0              # escalate 循环空转间隔（配合 MAX_SPEED 默认已很小）
+  # LIFERS_HTTP_TIMEOUT_CAP=12          # HTTP 上限秒（配合 MAX_SPEED）
+  # LIFERS_LOCAL_LM_MAX_CHARS=160       # 本地小模型生成长度上限
+  编辑器 settings：lifers.httpDirect=true 等价桥接里设 LIFERS_HTTP_DIRECT=1（代理端口不通时）

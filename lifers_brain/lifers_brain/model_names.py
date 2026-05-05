@@ -22,9 +22,9 @@ def env_model_token_for_process(canonical: str) -> str:
 
 
 def default_weight_paths(canonical: str) -> tuple[str, ...]:
-    """Prefer new Lifers filenames; keep legacy v001 as fallback."""
+    """Trained / pipeline output only — 不再带仓库内「玩具」tiny_transformer 后备。"""
     if canonical == "transformer":
-        return ("weights/lifers_transformer.json", "weights/tiny_transformer_v001.json")
+        return ("weights/lifers_transformer.json",)
     return ("weights/lifers_markov.json", "weights/markov_v001.json")
 
 

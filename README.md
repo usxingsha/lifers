@@ -26,6 +26,8 @@ git submodule update --init --depth 1
 
 **源码并入说明**：`third_party/openclaw`（git 子模块）与 `third_party/claw_code_rust`（Kali 并入）均在仓库内，用于对照与审计；Python 智脑 **不会** 自动调用其中的 npm/Rust 网关。对话默认 **本地**（`stack.json` → `remote_infer.enabled=false`，扩展 `lifers.remoteChat=false`），无需 NVIDIA 密钥即可聊天；需要云端大模型时再开启并配置环境变量密钥。
 
+**本地模型**：推理只认 **`lifers_brain/weights/lifers_transformer.json`**（及 stack 配置路径）；已删除仓库内玩具后备 **`tiny_transformer_v001.json`**。Kali/本机 **`train_lifers_escalate.py`** 持续写入同一文件时，对话侧按文件更新时间自动加载新权重（边训边用）。**Cursor**：仓库仅含 **`.cursor/rules`**（免费规则）；不捆绑 Cursor 商业安装包。
+
 ## 文档入口
 
 - 日常运维 AI：`lifers_brain/config/lifers_ai_playbook_zh.md`（由 `stack.json` → `llm_ops` 注入）

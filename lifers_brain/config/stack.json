@@ -90,7 +90,7 @@
     "model": "meta/llama-3.1-8b-instruct",
     "max_tokens": 1024,
     "api_key_env": "NVIDIA_API_KEY",
-    "note_zh": "默认关闭：无密钥亦可对话（本地 TinyTransformer/Markov + 记忆）。需要 NVIDIA Integrate 等大模型时：enabled=true + 环境变量密钥 + 重启编辑器；或仅开扩展「lifers.remoteChat」+ 密钥。api_key 禁止写入仓库。不要本地回退时设 LIFERS_LOCAL_FALLBACK=0。"
+    "note_zh": "默认关闭：无密钥亦可对话（本地 lifers_transformer.json / Markov + 记忆）。需要 NVIDIA Integrate 等大模型时：enabled=true + 环境变量密钥 + 重启编辑器；或仅开扩展「lifers.remoteChat」+ 密钥。api_key 禁止写入仓库。不要本地回退时设 LIFERS_LOCAL_FALLBACK=0。"
   },
   "llm_ops": {
     "enabled": true,

@@ -80,9 +80,14 @@
 - **`LIFERS_MAX_SPEED=1`**：减少大权重复核 JSON 的写盘频率、缩短 pause 轮询等（见 `lifers_brain/speed_env.py`）
 - **`LIFERS_TRAIN_SAVE_EVERY=N`**：每 N 步写一次权重（崩溃时可能多丢几步）
 
+### 9.3.1 边训练边用（同一台机）
+
+- 训练脚本写入 **`weights/lifers_transformer.json`**（原子替换）；**LocalBrain** 按文件 **mtime** 缓存失效，**下一轮对话**即加载新权重（长会话 REPL 亦如此）。单次 Bridge 子进程天然每次读盘。
+- 强制不用缓存：**`LIFERS_FORCE_WEIGHT_RELOAD=1`**。
+
 ### 9.4 本地对话（默认）与远程大模型（可选）
 
-- **默认无需 API**：`stack.remote_infer.enabled=false`，扩展 **`lifers.remoteChat=false`**，Agents Chat 走 **本地 TinyTransformer/Markov + 会话记忆**，不要求 **`NVIDIA_API_KEY`**。
+- **默认无需 API**：`stack.remote_infer.enabled=false`，扩展 **`lifers.remoteChat=false`**，Agents Chat 走 **本地 Lifers 权重（`weights/lifers_transformer.json`）/ Markov + 会话记忆**，不要求 **`NVIDIA_API_KEY`**。
 - **需要 NVIDIA Integrate 等云端时**：`stack.remote_infer.enabled=true` + 环境变量密钥 + **完全重启编辑器**；或仅开 **`lifers.remoteChat=true`** 并配置密钥。密钥勿写入仓库。
 - 仅云端、不要本地回退：**`LIFERS_LOCAL_FALLBACK=0`**。代理不通：**`LIFERS_HTTP_DIRECT=1`** 或 **`lifers.httpDirect`: true**
 

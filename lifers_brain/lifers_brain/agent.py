@@ -99,6 +99,10 @@ class LocalBrain:
     def __init__(self, cfg: AgentConfig):
         self.cfg = cfg
         self.model = canonical_brain_model(cfg.model)
+        self._tw_sig: tuple[str, float] | None = None
+        self._tw_loaded: object | None = None
+        self._mw_sig: tuple[str, float] | None = None
+        self._mw_loaded: object | None = None
 
     def _weights_path(self) -> Path:
         stack = load_stack(self.cfg.root_dir)
@@ -116,16 +120,56 @@ class LocalBrain:
                 return cand
         return (root / default_weight_paths(self.model)[0]).resolve()
 
+    def _transformer_weights(self, wp: Path) -> TinyTransformerWeights:
+        """训练写入同一 JSON 时按 mtime 热加载（边训边用）；设 LIFERS_FORCE_WEIGHT_RELOAD=1 跳过缓存。"""
+        force = os.environ.get("LIFERS_FORCE_WEIGHT_RELOAD", "").strip().lower() in ("1", "true", "yes", "on")
+        try:
+            mt = wp.stat().st_mtime
+        except OSError:
+            mt = 0.0
+        key = str(wp.resolve())
+        sig = (key, mt)
+        if (
+            not force
+            and self._tw_sig == sig
+            and self._tw_loaded is not None
+            and isinstance(self._tw_loaded, TinyTransformerWeights)
+        ):
+            return self._tw_loaded
+        w = TinyTransformerWeights.load(wp)
+        self._tw_sig = sig
+        self._tw_loaded = w
+        return w
+
+    def _markov_weights(self, wp: Path) -> MarkovWeights:
+        force = os.environ.get("LIFERS_FORCE_WEIGHT_RELOAD", "").strip().lower() in ("1", "true", "yes", "on")
+        try:
+            mt = wp.stat().st_mtime
+        except OSError:
+            mt = 0.0
+        key = str(wp.resolve())
+        sig = (key, mt)
+        if (
+            not force
+            and self._mw_sig == sig
+            and self._mw_loaded is not None
+            and isinstance(self._mw_loaded, MarkovWeights)
+        ):
+            return self._mw_loaded
+        w = MarkovWeights.load(wp)
+        self._mw_sig = sig
+        self._mw_loaded = w
+        return w
+
     def generate(self, prompt: str) -> str:
         wp = self._weights_path()
         mc = speed_local_lm_max_chars(int(getattr(self.cfg, "local_lm_max_chars", 200) or 200))
         if not wp.exists():
-            return "(missing weights) run scripts/run_pipeline.py first"
+            return "(missing weights) run scripts/run_pipeline.py or sync weights/lifers_transformer.json"
         if self.model == "transformer":
-            w = TinyTransformerWeights.load(wp)
-            # 温度略降：纯 Python 小模型采样过散时更像乱码墙。
+            w = self._transformer_weights(wp)
             return tt_generate(w, prompt=prompt, max_chars=mc, seed=3, temperature=0.72, top_k=40).strip()
-        w = MarkovWeights.load(wp)
+        w = self._markov_weights(wp)
         return markov_generate(w, prompt=prompt, max_chars=max(mc, 120), seed=3, temperature=0.9, top_k=80).strip()
 
 
@@ -718,10 +762,10 @@ class LifersAgent:
             return self._web_search_reply(u, u)
         if not _quick_output_sane(text, u):
             return (
-                "本地 **TinyTransformer/Markov** 只是仓库自带的**极小字符语言模型**（训练目标为可跑通流水线，"
-                "不是 ChatGPT 级对话模型），短输入或分布外话题很容易看起来像乱码。\n"
-                "建议：用**完整中文句**提问；需要事实检索发 **search …**；或接 **stack.json → llm_ops** 里的外部大模型；"
-                "若已关沙盒仍异常，检查 **LIFERS_QUICK_WEB=1** 与网络/代理。"
+                "本地 **Lifers 权重（lifers_transformer.json / Markov）** 由你的训练流水线写入，体量与效果取决于训练进度；"
+                "短输入或分布外话题仍可能不理想。\n"
+                "建议：用**完整中文句**提问；事实检索发 **search …**；需要云端大模型再接 **stack.json → remote_infer**；"
+                "若已关沙盒仍异常，检查 **LIFERS_QUICK_WEB=1** 与网络/代理。训练过程中同一权重文件更新后，下一句对话会自动读最新（mtime）。"
             )
         return text
 

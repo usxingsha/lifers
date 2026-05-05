@@ -1,0 +1,19 @@
+---
+description: Lifers 便携仓约定（免费规则文件；不包含 Cursor 付费产品）
+alwaysApply: true
+---
+
+## 布局
+
+- 便携根目录名 **`lifers`**；智脑在 **`lifers_brain/`**，运行时真相 **`lifers_brain/config/stack.json`**。
+- 本地对话权重：**`lifers_brain/weights/lifers_transformer.json`**（训练产物；已移除仓库内玩具 `tiny_transformer_v001` 后备）。
+- 对照源码（非 Python 运行时）：**`third_party/openclaw`**（git 子模块）、**`third_party/claw_code_rust`**（vendor）。勿把 npm/Rust 网关写进 `stack.brain` 当默认对话后端。
+
+## 边训练边用
+
+- 推理侧按权重文件 **mtime** 热加载；训练进程原子覆盖 JSON 后，**下一轮对话**即读新权重。调试可设 **`LIFERS_FORCE_WEIGHT_RELOAD=1`**。
+
+## 禁止
+
+- 向仓库提交 API 密钥或 **`secrets.env`** 正文。
+- 捆绑 Cursor 安装包或需单独付费的专有运行时（仅维护本仓库内 `.cursor/rules` 等开放配置）。

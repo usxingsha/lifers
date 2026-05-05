@@ -9,11 +9,11 @@ Python 包名 **`lifers_brain`**；便携仓库根目录历史上曾名 **`rs`**
 **一键全量同步 UI（推荐）**：`powershell -NoProfile -ExecutionPolicy Bypass -File scripts\sync_lifers_agents_ui_windows_kali.ps1`  
 （不打断 Kali 训练加 **`-SkipTrainPause`**；同步后让训练继续加 **`-ResumeKaliTrain`**；只看 Kali 训练状态：`scripts\kali_train_status.ps1`）
 
-**对话质量预期**：`weights/lifers_transformer.json` 等来自 **TinyTransformer / Markov** 流水线，目标是「可跑、可评估、可增量」，**不是** ChatGPT 级日常闲聊。短数字/无中文句容易采样成噪声；请用**完整中文**提问，或 **search …** / 配置 **stack.json → llm_ops** 接外部大模型。Agents Chat 里若本地输出被判异常会自动尝试联网（需关沙盒且网络可用）。
+**对话质量预期**：`weights/lifers_transformer.json` 由 **`train_lifers_escalate.py` / `train_transformer_weights.py`** 等写入（同一 JSON 格式），质量随训练进度上升；**不是** ChatGPT 级开箱体验。短输入容易采样飘；请用**完整中文**或 **search …** / **remote_infer** 接云端大模型。训练写入权重后，对话侧按文件更新时间热加载（边训边用）。
 
 **训练/权重/纠错知识注入**：长文约定在 **`config/lifers_ai_playbook_zh.md` §9**（经 `llm_ops` 进入对话上下文）；含 Kali tmux、checkpoint、速度变量、常见误操作。**自修复**：`LIFERS_SELF_HEAL`（默认开）合并缺失 `stack` 键；**自改代码**：`state/self_code_queue/` JSON → `self_code_runner`（见 playbook §9.6）。
 
-**NVIDIA / OpenAI 兼容远程推理（无 Ollama、仅 urllib+json）**：在 **`config/stack.json`** 中已加入 **`remote_infer`**（默认启用）；密钥**只**放在操作系统环境变量 **`NVIDIA_API_KEY`**（勿写入仓库或聊天）。扩展 **v0.5.5+** 会向 Bridge 注入 **`LIFERS_REMOTE_CHAT`**；详见 **`config/nvidia_api.env.example`**。仅远程、不要本地 TinyTransformer 回退时设 **`LIFERS_LOCAL_FALLBACK=0`**。
+**NVIDIA / OpenAI 兼容远程推理（可选）**：**`config/stack.json` → `remote_infer.enabled`**（默认 **false**，本地对话不需密钥）。需要云端时再 **enabled=true** + 环境变量 **`NVIDIA_API_KEY`**；扩展 **`lifers.remoteChat`** 与之一致。详见 **`config/nvidia_api.env.example`**。仅远程、不要本地回退时设 **`LIFERS_LOCAL_FALLBACK=0`**。
 
 **速度（训练 / 执行 / HTTP）**：设环境变量 **`LIFERS_MAX_SPEED=1`**（或在 Kali/tmux 里 `export` 后再启训练）可启用：`train_sgd` **降低大权重复核 JSON 写盘频率**、pause 轮询更密、HTTP 超时上限收紧、本地 LM 生成长度上限缩小；详见 **`lifers_brain/speed_env.py`** 与 **`scripts/LIFERS_KALI_CHEATSHEET_zh.txt`**。仍可用 **`LIFERS_TRAIN_SAVE_EVERY`**、**`LIFERS_PAUSE_POLL_SEC`**、**`LIFERS_HTTP_TIMEOUT_CAP`** 逐项覆盖。代理不通时扩展里 **`lifers.httpDirect`: true** 或 **`LIFERS_HTTP_DIRECT=1`**。
 
@@ -24,7 +24,7 @@ Python 包名 **`lifers_brain`**；便携仓库根目录历史上曾名 **`rs`**
 
 ### 随跑随用 · 每段 B 暂停同步 · 能力队列（不设「产品挡位」上限）
 
-- **超过单一聊天大模型的底子**：靠 **整条栈** 叠起来——本地 `TinyTransformer` 增量权重 + **stack.json → llm_ops** 外部强模型 + **taskflow**（检索/命令/沙箱）+ **eval**。本地 ramp 负责「可增量、可审计、可离线」；前沿对话/编程仍以 API/自托管大模型为主力，本地权重做路由、风格、记忆与工具编排，而不是指望同一张 JSON 打败 GPT 类通用模型。
+- **超过单一聊天大模型的底子**：靠 **整条栈** 叠起来——本地 **`lifers_transformer.json` 持续训练** + **stack.json → llm_ops** 外部强模型 + **taskflow**（检索/命令/沙箱）+ **eval**。本地 ramp 负责「可增量、可审计、可离线」；前沿对话/编程仍可接 API/自托管大模型，本地权重负责增量与编排。
 - **每满约 1B 近似 float 预算**（`LIFERS_CHECKPOINT_EVERY_B`，默认 1）：`train_lifers_escalate.py` 写入 **`weights/checkpoints/chunk_*B_*.json`** + **`manifest.jsonl`**，并可设 **`LIFERS_POST_CHECKPOINT_CMD`**（例：`scripts/post_checkpoint_hook_example.sh`）做 scp/rsync。
 - **暂停去更新**：设 **`LIFERS_PAUSE_ON_CHECKPOINT=1`**，在新 B 档 checkpoint 落盘且 post-cmd 跑完后，自动把 **`weights/.train_control`** 写成 **`pause`**；你同步/打包/换机拉取后，再 **`lifers_train_ctl.sh run`**（或 `echo run > …/.train_control`）继续。**不限训练目标 B**：配合 **`LIFERS_ESCALATE_UNLIMITED=1`** + 大 **`LIFERS_RAMP_MAX_ITERS`**（见 `train_lifers_escalate.py` 文档字符串），直到 OOM 或手动 stop。
 - **跑完一段就切下一类能力**：编辑 **`config/capability_queue.json`**（编程 → 聊天 → 工具 → 检索 → 安全…），用 **`python scripts/lifers_capability_queue.py show|env|advance`**；`env` 子命令打印 **`LIFERS_TRAIN_SUITE_DIR`**，供下一轮 escalate 读取（各 `suite_dir` 下放你的 **jsonl** 语料）。

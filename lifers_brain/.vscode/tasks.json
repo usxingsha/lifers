@@ -37,7 +37,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Lifers: 训练 TinyTransformer（日常对话）",
+      "label": "Lifers: 训练 lifers_transformer（本地流水线）",
       "type": "shell",
       "command": "${workspaceFolder}/.venv/Scripts/python.exe",
       "args": ["scripts/train_transformer_weights.py"],

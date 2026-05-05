@@ -1,7 +1,7 @@
 {
   "version": 1,
   "primary_product": "Lifers (lifers_brain LocalBrain / stack.json / tools)",
-  "policy_zh": "以 Lifers 配置与 Python 工具链为唯一运行时真相；vendor 树仅供对照、审计与迁移参考，不在此进程内启动 OpenClaw 或 claw-code 网关。云 API 不进 stack.brain。",
+  "policy_zh": "便携根目录名 lifers（与 GitHub 仓 lifers 一致）。以 Lifers 配置与 Python 工具链为唯一运行时真相；vendor 树仅供对照、审计与迁移参考，不在此进程内启动 OpenClaw 或 claw-code 网关。云 API 不进 stack.brain。",
   "policy_en": "Lifers stack is authoritative at runtime; vendor trees are reference-only; no OpenClaw or claw-code gateway in-process; no cloud API keys in stack.brain.",
   "vendors": [
     {

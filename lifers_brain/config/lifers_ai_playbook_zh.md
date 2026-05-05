@@ -26,7 +26,7 @@
 
 ## 4. 编辑器与面板（日常操作）
 
-- 推荐打开便携根下的 **`lifers.code-workspace`**（同目录备有 **`rs.code-workspace`** 副本），使 **Python 解释器** 指向 **`${workspaceFolder:lifers_brain}`** 与仓库一致。
+- 推荐打开便携根（文件夹 **`lifers`**）下的 **`lifers.code-workspace`**（同目录备有 **`rs.code-workspace`** 兼容副本），使 **Python 解释器** 指向 **`${workspaceFolder:lifers_brain}`** 与仓库一致。
 - **Agents Chat**：中间编辑区对话；**会话建立**：左侧 **Lifers** 活动栏或 **资源管理器** 底部同名视图（镜像）。
 - 改 **`lifers.*` 设置** 或 **`config/stack.json`** 后：**Developer: Reload Window** 或重开 Bridge 所在窗口。
 - **模型**：`lifers`（与 transformer 同权重）、`markov`；**超时**：`lifers.bridgeTimeoutMs`。
@@ -111,7 +111,7 @@
 - **对齐上游发行**：在有外网的环境运行 **`python scripts/sync_openclaw_release.py`**（写入最新 **`compat_ref`** 与 manifest 的 **`last_synced_tag`**）。代理误伤 GitHub（WinError 10061）时与同 playbook §1：**`LIFERS_HTTP_DIRECT=1`** 后再运行。
 - **漂移检测**：**`python scripts/lifers_verify_config.py`**；或在进程环境里 **`LIFERS_CHECK_OPENCLAW=1`**，校验远端 release 与锚点是否一致（不一致会得到告警文案）。
 - **边界复述**：网关/频道/托管模型/OpenClaw Skills **不属于**本 Python 进程；云 API **仅限** `remote_infer` + 环境变量密钥；本地权重与 **`lifers_brain.tools`** 才是本仓库实现面。
-- **OpenClaw 上游源码**：推荐 **`git submodule update --init --depth 1`**（仓库根含 **`.gitmodules`**）。或在 `rs` 根执行 **`scripts/vendor_openclaw_reference.ps1`** / **`lifers_brain/scripts/vendor_openclaw_reference.sh`**（会优先子模块再浅克隆）。对照 **`openclaw_manifest.json`** 与 **`config/openclaw_upstream_vendor.json`**，不跑 `npm` 构建。
+- **OpenClaw 上游源码**：推荐 **`git submodule update --init --depth 1`**（仓库根含 **`.gitmodules`**）。或在便携根（目录 **`lifers`**）执行 **`scripts/vendor_openclaw_reference.ps1`** / **`lifers_brain/scripts/vendor_openclaw_reference.sh`**（会优先子模块再浅克隆）。对照 **`openclaw_manifest.json`** 与 **`config/openclaw_upstream_vendor.json`**，不跑 `npm` 构建。
 - **claw-code/rust（Rust workspace）并入**：完整源码在 **`rs/third_party/claw_code_rust`**（来自 Kali **`~/claw-code/rust`**，排除 `target` 与会话缓存）；清单 **`config/claw_code_rust_vendor.json`**，审计说明 **`third_party/claw_code_rust/LIFERS_MERGE.md`**。内含 **`crates/api`** 等仅为 **vendor 对照**，**不在 Lifers Python 进程内**启用其网关或把云 API 写入 **`stack.brain`**（与 §10 第一条一致）。**`package_rs_for_kali.ps1`** 仅打包 **`lifers_brain/`**，若 Kali 也需同目录请另行 **`scp`/`rsync`** 整个 **`rs/third_party/claw_code_rust`**。
 
 ## 11. 工作区 `rs0` 与自定义多根

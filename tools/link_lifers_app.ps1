@@ -1,28 +1,44 @@
 #Requires -Version 5.1
 <#
-  将 sibling 目录 ..\lifers（独立应用仓）接到便携根下的 lifers junction（NTFS）。
-  便携根文件夹历史上曾名为 rs；不改变 lifers_brain。
+  将独立 Lifers 桌面应用仓接到便携根下的 lifers junction（NTFS），供扩展/壳查找。
+  便携根目录建议命名为 lifers（与 GitHub 一致）；不改变 lifers_brain。
+
+  兄弟目录候选（首个存在且不等于便携根本身则用）：lifers-app、lifers-desktop、lifers。
+  若便携根文件夹已名为 lifers，则 ..\lifers 会与自身重合，脚本会自动跳过该项。
 
   用法（在便携根目录执行）:
     powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\link_lifers_app.ps1
 
-  自定义 lifers 路径（可选）:
-    $env:LIFERS_APP_ROOT = "C:\Users\...\curku\lifers"
+  自定义应用仓路径:
+    $env:LIFERS_APP_ROOT = "D:\path\to\lifers-desktop-repo"
 #>
 $ErrorActionPreference = "Stop"
 $rsRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
-$defaultTarget = Join-Path $rsRoot "..\lifers"
+$parentDir = Split-Path -Parent $rsRoot
+$rsResolved = (Resolve-Path -LiteralPath $rsRoot).Path
+$candidates = @(
+  (Join-Path $parentDir "lifers-app"),
+  (Join-Path $parentDir "lifers-desktop"),
+  (Join-Path $parentDir "lifers")
+)
 if ($env:LIFERS_APP_ROOT) {
   $target = $env:LIFERS_APP_ROOT.TrimEnd('\', '/')
 } else {
-  try {
-    $target = (Resolve-Path -LiteralPath $defaultTarget).Path
-  } catch {
-    $target = $null
+  $target = $null
+  foreach ($c in $candidates) {
+    if (-not (Test-Path -LiteralPath $c)) { continue }
+    try {
+      $cr = (Resolve-Path -LiteralPath $c).Path
+    } catch {
+      continue
+    }
+    if ($cr -ieq $rsResolved) { continue }
+    $target = $cr
+    break
   }
 }
 if (-not $target -or -not (Test-Path -LiteralPath $target)) {
-  Write-Error "Lifers app folder not found. Expected: $defaultTarget  Set env:LIFERS_APP_ROOT to override."
+  Write-Error "Lifers desktop app folder not found under $parentDir (tried lifers-app, lifers-desktop, lifers excluding portable root). Set env:LIFERS_APP_ROOT to override."
 }
 $linkPath = Join-Path $rsRoot "lifers"
 

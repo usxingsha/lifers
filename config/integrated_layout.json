@@ -1,8 +1,8 @@
 {
   "version": 1,
   "primary": "lifers",
-  "description": "CN: lifers 便携根（原 rs）：默认工作区见 workspace_settings；本机覆盖 config/workspace_custom.json（勿提交）。 | EN: Portable lifers root; defaults in workspace_settings; local overlay config/workspace_custom.json (do not commit).",
-  "philosophy": "CN: 默认多根首项为 ./rs0；第二根为整仓根「lifers」；智脑为 lifers_brain。由本文件物化 lifers.code-workspace（并写 rs.code-workspace 副本兼容）。 | EN: Folders: rs0, portable root, lifers_brain; materialize lifers.code-workspace + rs.code-workspace alias.",
+  "description": "CN: 便携根目录名 lifers（与 GitHub 仓一致）；默认工作区见 workspace_settings；本机覆盖 config/workspace_custom.json（勿提交）。 | EN: Portable root folder lifers; defaults in workspace_settings; local overlay config/workspace_custom.json (do not commit).",
+  "philosophy": "CN: 默认多根首项为 ./rs0；第二根为整仓根（文件夹名 lifers）；智脑为 lifers_brain。由本文件物化 lifers.code-workspace（并写 rs.code-workspace 兼容副本）。 | EN: Folders: rs0, portable root (lifers), lifers_brain; materialize lifers.code-workspace + rs.code-workspace alias.",
   "roots": [
     {
       "id": "rs0_workspace",

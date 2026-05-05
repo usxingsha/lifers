@@ -1,6 +1,8 @@
 # Lifers
 
-Portable **Lifers** root（智脑 `lifers_brain` + 配置与工具）。运行时以 `lifers_brain/config/stack.json` 为准。
+Portable **Lifers** root（目录名建议 **`lifers`**，与 GitHub 仓一致；智脑 `lifers_brain` + 配置与工具）。运行时以 `lifers_brain/config/stack.json` 为准。
+
+若本机仍为旧文件夹名 **`rs`**：请先关闭占用该路径的编辑器，再运行 **`powershell -File tools/rename_portable_folder_rs_to_lifers.ps1`**（或在 **`Desktop\curku`** 下手动把 **`rs`** 重命名为 **`lifers`**）。
 
 ## 克隆
 

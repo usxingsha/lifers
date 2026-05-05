@@ -1,7 +1,7 @@
 {
   "version": 1,
   "role": "vendor_source_audit",
-  "path_relative_to_rs": "third_party/claw_code_rust",
+  "path_relative_to_portable_root": "third_party/claw_code_rust",
   "source_authoritative": {
     "host": "kali",
     "path": "/home/kali/claw-code/rust",

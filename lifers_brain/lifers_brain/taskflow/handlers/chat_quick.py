@@ -10,4 +10,10 @@ KIND = TaskKind.CHAT_QUICK
 
 def handle(ctx: TaskContext) -> HandlerResult:
     r = ctx.agent.quick_chat(ctx.user_text)
-    return HandlerResult(handled=True, reply=r, meta={"handler": "chat_quick", "kind": KIND.value})
+    meta = {
+        "handler": "chat_quick",
+        "kind": KIND.value,
+        "dialogue_route_reason": getattr(ctx, "dialogue_route_reason", "") or "",
+        "dialogue_route_notes_zh": getattr(ctx, "dialogue_route_notes_zh", "") or "",
+    }
+    return HandlerResult(handled=True, reply=r, meta=meta)

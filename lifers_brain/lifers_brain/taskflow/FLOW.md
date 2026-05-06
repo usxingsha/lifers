@@ -7,8 +7,8 @@ flowchart LR
   A[桥接 stdin JSON] --> B[拼 full 文本]
   B --> C{split_user_message}
   C -->|有上下文前缀| K[TaskKind.FULL_PIPELINE]
-  C -->|仅用户尾句| D[classify_task]
-  D --> E[TaskKind]
+  C -->|仅用户尾句| D[dialogue_router.infer_dialogue_route]
+  D --> E[TaskKind + reason/notes]
   E --> F[TaskDispatcher]
   F --> G[handlers/* 处理库]
   G --> H[LifersAgent.quick_chat 或 step]
@@ -17,7 +17,7 @@ flowchart LR
   J --> K[steward_after_learn 修剪旧 taskflow]
 ```
 
-- **分类**（`classify.py`）：与 `Planner` / 本能启发式对齐，产出 `TaskKind`。
+- **对话推理分发**（`dialogue_router.py`）：与 `Planner` / 本能启发式对齐，产出 `TaskKind` + `reason`/`notes_zh`；stderr 打 `LIFERS_PROGRESS dialogue_route {...}`。`classify.py` 的 `classify_task` 为其薄封装。
 - **分发**（`dispatcher.py`）：`TaskKind` → 对应 `handlers/*.py` 的 `handle(ctx)`。
 - **智脑**：`CHAT_QUICK` 走 `quick_chat()`（短对话）；其余类型走 `step(agent_input)`（完整工具链与头尾本能）。
 - **学习**（`learn.py`）：每轮将 `kind`、用户摘录、回复摘录写入长期记忆 `type=taskflow`（可用 `LIFERS_TASKFLOW_LEARN=0` 关闭）。

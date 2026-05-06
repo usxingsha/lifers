@@ -11,7 +11,8 @@ from typing import TYPE_CHECKING
 
 import os
 
-from lifers_brain.taskflow.classify import classify_task, split_user_message
+from lifers_brain.taskflow.classify import split_user_message
+from lifers_brain.taskflow.dialogue_router import infer_dialogue_route
 from lifers_brain.taskflow.context import TaskContext
 from lifers_brain.taskflow.handlers import build_default_dispatcher
 from lifers_brain.steward import steward_after_learn
@@ -24,9 +25,17 @@ if TYPE_CHECKING:
 
 def run_lifers_turn(agent: LifersAgent, agent_input: str) -> str:
     user_text, has_ctx = split_user_message(agent_input)
-    kind = classify_task(user_text, has_ctx)
+    route = infer_dialogue_route(user_text, has_ctx, emit=True)
+    kind = route.kind
     print(f"LIFERS_PROGRESS taskflow kind={kind.value}", file=sys.stderr, flush=True)
-    ctx = TaskContext(agent=agent, agent_input=agent_input, user_text=user_text, kind=kind)
+    ctx = TaskContext(
+        agent=agent,
+        agent_input=agent_input,
+        user_text=user_text,
+        kind=kind,
+        dialogue_route_reason=route.reason,
+        dialogue_route_notes_zh=route.notes_zh,
+    )
     dispatcher = build_default_dispatcher()
     res = dispatcher.dispatch(kind, ctx)
     # CHAT_QUICK 默认不写 longterm + 不跑 steward，避免 SQLite 膨胀后 count/prune 拖垮 Bridge（秒回路径）。

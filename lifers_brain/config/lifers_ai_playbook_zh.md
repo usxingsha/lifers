@@ -9,7 +9,7 @@
   - 环境变量 **`LIFERS_HTTP_DIRECT=1`**（进程内出站不再走上述代理）；
   - 编辑器设置 **`lifers.httpDirect`: true**（VSCodium/Cursor 扩展在启动 Bridge 时注入 `LIFERS_HTTP_DIRECT=1`）。
 - **不联网（占位）**：`SANDBOX=1` 时网络类工具多为占位结果；与扩展里 **lifers.sandbox** 对齐。
-- **闲聊里是否自动搜网**：由 **`LIFERS_QUICK_WEB`** 控制（默认开）；设为 `0` / `false` 可关闭「短句也自动 web_search」的行为。
+- **闲聊里是否自动搜网**：由 **`LIFERS_QUICK_WEB`** 控制；扩展 **`lifers.quickWeb`** 经 Agents Chat 注入。`lifers_turn`（stdin bridge）对**非** `LIFERS_AGENTS_UI_BRIDGE=1` 的进程会**强制** `LIFERS_QUICK_WEB=0`，避免宿主 shell 误 export 导致卡死；终端若要沿用宿主开关请设 **`LIFERS_QUICK_WEB_RESPECT_HOST=1`**。
 
 ## 2. 编码与乱码（Windows / 管道）
 
@@ -26,10 +26,10 @@
 
 ## 4. 编辑器与面板（日常操作）
 
-- 推荐打开便携根（文件夹 **`lifers`**）下的 **`lifers.code-workspace`**（同目录备有 **`rs.code-workspace`** 兼容副本），使 **Python 解释器** 指向 **`${workspaceFolder:lifers_brain}`** 与仓库一致。
+- 推荐打开便携根（文件夹 **`lifers`**）下的 **`lifers.code-workspace`**，使 **Python 解释器** 指向 **`${workspaceFolder:lifers_brain}`** 与仓库一致。
 - **Agents Chat**：中间编辑区对话；**会话建立**：左侧 **Lifers** 活动栏或 **资源管理器** 底部同名视图（镜像）。
 - 改 **`lifers.*` 设置** 或 **`config/stack.json`** 后：**Developer: Reload Window** 或重开 Bridge 所在窗口。
-- **模型**：Agents Chat / Bridge **固定 `MODEL=lifers`**（与 `weights/lifers_transformer.json` 对齐）；终端脚本仍可自选。**超时**：`lifers.bridgeTimeoutMs`。
+- **模型**：Agents Chat / Bridge **固定 `MODEL=lifers`**（与 `weights/lifers_transformer.json` 对齐）；终端脚本仍可自选。**超时**：外层整次 Bridge 用 **`lifers.bridgeTimeoutMs`**（默认 15min）；POSIX 上 CHAT_QUICK 本地 generate 内层墙钟用 **`LIFERS_QUICK_GENERATE_TIMEOUT_SEC`**（扩展 **`lifers.edgeGenerateTimeoutSec`** 非 0 时注入）。
 - **上下文**：`lifers.contextMaxFiles`、Chat 内 `@` 路径、`lifers: 添加上下文文件/目录` 命令。
 
 ## 5. 回复规范（防乱码、防胡编）
@@ -119,11 +119,25 @@
 - **OpenClaw 上游源码**：推荐 **`git submodule update --init --depth 1`**（仓库根含 **`.gitmodules`**）。或在便携根（目录 **`lifers`**）执行 **`scripts/vendor_openclaw_reference.ps1`** / **`lifers_brain/scripts/vendor_openclaw_reference.sh`**（会优先子模块再浅克隆）。对照 **`openclaw_manifest.json`** 与 **`config/openclaw_upstream_vendor.json`**，不跑 `npm` 构建。
 - **claw-code/rust（Rust workspace）并入**：完整源码在便携根 **`third_party/claw_code_rust`**；Kali 上权威对照路径为 **`~/lifers/third_party/claw-code/rust`**（排除 `target` 与会话缓存）；清单 **`config/claw_code_rust_vendor.json`**，审计说明 **`third_party/claw_code_rust/LIFERS_MERGE.md`**。内含 **`crates/api`** 等仅为 **vendor 对照**，**不在 Lifers Python 进程内**启用其网关或把云 API 写入 **`stack.brain`**（与 §10 第一条一致）。Windows→Kali 整仓同步用 **`lifers_brain/scripts/push_brain_and_loop_kali.ps1`**（内部调用 **`package_rs_for_kali.ps1`**，自仓库根打包）。
 
+### 10.9 Lifers 本体 LLM「对话→回复」与上游 vendor 去重（必读）
+
+| 能力 | 真相来源（运行时） | 上游 vendor（只读/对照） |
+|------|-------------------|---------------------------|
+| 用户一句 → 助手一句 | **`lifers_brain`**：`bridge_turn` / `taskflow` → **`LifersAgent`** → **`LocalBrain.generate`** + **`weights/*.json`** | **不是** `third_party/openclaw` npm 网关 |
+| 工具调用 | **`lifers_brain/tools.py`** `build_default_registry` | OpenClaw Skills / MCP **不**自动映射进本进程 |
+| 云端大模型（可选） | **`stack.remote_infer`** + 环境变量密钥 + `LIFERS_ALLOW_REMOTE_INFER` | 与 OpenClaw Provider 列表 **无硬绑定** |
+| 清单锚点 | **`stack.openclaw.compat_ref`**、`openclaw_manifest.json` | `sync_openclaw_release.py` 只改锚点，不安装上游 |
+| Rust claw-code | **`claw_code_rust_vendor.json`** + `LIFERS_MERGE.md` | 与 Python 对话栈 **并行目录**，不 `import` 进智脑 |
+
+- **一键索引**：**`config/lifers_llm_bootstrap.json`**（与本节一致；给运维/模型同事最短路径）。
+- **自检**：**`python scripts/check_lifers_llm_ready.py`**（权重是否存在 + vendor 目录是否检出）；再 **`python scripts/lifers_verify_config.py`**。
+- **首跑生成权重**：**`python scripts/run_pipeline.py`**（或按 §9 训练脚本）；无权重则 Bridge 会卡在缺文件或仅 Markov 占位。
+
 ## 11. 工作区 `rs0` 与自定义多根
 
 - **默认**：`config/integrated_layout.json` 多根 **第一项** 为 **`./rs0`**（与便携根全树、`./lifers_brain` 并列），供日常可写文件、小实验、非仓库核心内容。
 - **完全自定义**：复制 **`config/workspace_custom.example.json` → `config/workspace_custom.json`**（后者勿提交），修改 **`folders`** 数组；**非空** 时**覆盖** layout 的 roots。可改 `rs0` 路径或改名、增删根。
-- **物化**：在便携根执行 **`python tools/materialize_integrated_workspace.py`** 更新 **`lifers.code-workspace`**（并写 **`rs.code-workspace`** 兼容副本）后重载编辑器窗口。
+- **物化**：在便携根执行 **`python tools/materialize_integrated_workspace.py`** 更新 **`lifers.code-workspace`** 后重载编辑器窗口。
 
 ## 12. 双机（Windows ↔ Kali）智脑同步
 

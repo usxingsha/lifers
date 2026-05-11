@@ -80,7 +80,7 @@ def effective_workspace_limits() -> Dict[str, int]:
     return {
         "lifers.contextMaxFiles": _iget("lifers.contextMaxFiles", 48),
         "lifers.bridgeContextMaxFiles": _iget("lifers.bridgeContextMaxFiles", 32),
-        "lifers.bridgeTimeoutMs": _iget("lifers.bridgeTimeoutMs", 600000),
+        "lifers.bridgeTimeoutMs": _iget("lifers.bridgeTimeoutMs", 900000),
     }
 
 

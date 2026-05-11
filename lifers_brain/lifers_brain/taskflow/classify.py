@@ -1,4 +1,7 @@
-"""规则分类器：委托对话推理分发器 `dialogue_router`，产出 TaskKind。"""
+"""规则分类器：仅做消息切分并委托 `dialogue_router` 产出 TaskKind。
+
+新增路由条件请改 `dialogue_router.py` / `daily_intents.py`，勿在本文件复制 if/else（见 taskflow/FLOW.md「单一事实来源」）。
+"""
 
 from __future__ import annotations
 

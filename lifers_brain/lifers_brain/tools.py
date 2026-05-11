@@ -1,5 +1,23 @@
 from __future__ import annotations
 
+"""
+Lifers 可执行工具（`ToolRegistry`）。
+
+**单一实现源**：本模块各类 `*Tool` 的 `spec.name` + `build_default_registry()` 的 `register(...)` 顺序。
+`agent.Planner` / `agent.LifersAgent._step_core` 只产出已注册 **name** 的 `ToolCall`；`config/domains.json` 与
+`config/organ_capabilities.json` 的 `tools` 数组为**文档映射**，不得再实现一套执行逻辑。
+
+默认注册名（与 `build_default_registry` 一致，共 18 项）::
+
+    web_search, web_fetch, extract_evidence, fs_read, fs_write_patch,
+    lifers_workspace_write, cmd_run, kb_upsert, kb_search, kb_prune, kb_compact,
+    sim_run, sense_snapshot, motion_plan, motion_execute, manipulate,
+    safety_stop, real_world
+
+编排入口（非新工具名）：`smart`/`智搜`、`流程`/`workflow`、`方案`/`plan`、`cmd`、`sim_run`、`kb_*`、含 URL/路径
+的自然语言等 — 见 `agent.py` 中 `Planner` 与 `_step_core`。
+"""
+
 import json
 import os
 import re
@@ -1292,6 +1310,7 @@ class RealWorldTool(Tool):
                         "summary": summary,
                         "detail": data,
                         "source": "wttr.in",
+                        "fetched_at_ms": _now_ms(),
                     },
                 )
             except Exception as e:
@@ -1322,6 +1341,7 @@ class RealWorldTool(Tool):
                         "lon": lon,
                         "openstreetmap_url": osm,
                         "source": "nominatim",
+                        "fetched_at_ms": _now_ms(),
                     },
                 )
             except Exception as e:

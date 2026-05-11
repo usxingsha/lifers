@@ -18,6 +18,7 @@ from lifers_brain.taskflow.handlers import build_default_dispatcher
 from lifers_brain.steward import steward_after_learn
 from lifers_brain.taskflow.learn import learn_from_turn
 from lifers_brain.taskflow.kinds import TaskKind
+from lifers_brain.inference_pipeline import log_inference
 
 if TYPE_CHECKING:
     from lifers_brain.agent import LifersAgent
@@ -28,6 +29,13 @@ def run_lifers_turn(agent: LifersAgent, agent_input: str) -> str:
     route = infer_dialogue_route(user_text, has_ctx, emit=True)
     kind = route.kind
     print(f"LIFERS_PROGRESS taskflow kind={kind.value}", file=sys.stderr, flush=True)
+    log_inference(
+        "taskflow_route",
+        kind=kind.value,
+        route_reason=route.reason,
+        notes_zh=(route.notes_zh or "")[:240] or None,
+        has_context_prefix=bool(has_ctx),
+    )
     ctx = TaskContext(
         agent=agent,
         agent_input=agent_input,

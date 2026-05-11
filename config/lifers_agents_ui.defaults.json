@@ -15,7 +15,8 @@
   "lifers.autoCreateSessionOnStart": true,
   "lifers.contextMaxFiles": 48,
   "lifers.bridgeContextMaxFiles": 32,
-  "lifers.bridgeTimeoutMs": 600000,
+  "lifers.bridgeTimeoutMs": 900000,
+  "lifers.edgeGenerateTimeoutSec": 0,
   "lifers.contextFolderMaxCollect": 96,
   "lifers.contextFolderMaxDepth": 6,
   "lifers.contextFolderSkipDirs": [

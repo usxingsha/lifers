@@ -13,7 +13,7 @@ if not exist "%APP%\scripts\run_agent.py" (
 cd /d "%APP%"
 set PYTHONUTF8=1
 set SANDBOX=1
-set MODEL=transformer
+set MODEL=lifers
 
 set "PYEXE=python"
 if exist "%APP%\.venv\Scripts\python.exe" set "PYEXE=%APP%\.venv\Scripts\python.exe"

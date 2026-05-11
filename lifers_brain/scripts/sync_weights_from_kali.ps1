@@ -9,21 +9,25 @@
   .\sync_weights_from_kali.ps1 -KaliHost 192.168.234.152 -Force
   .\sync_weights_from_kali.ps1 -Watch
   .\sync_weights_from_kali.ps1 -WatchIntervalSec 300
+  .\sync_weights_from_kali.ps1 -SkipTrainPause   # 拉权重前不暂停远端训练（慎用）
 
 .NOTES
   - 默认仅当远端 lifers_transformer.json 比本地新（mtime）或本地缺失时才拉取大文件； -Force 强制覆盖。
   - 大块权重可用 SFTP 压缩：scp 自带 -C。
-  - 「完成一段同步一次」：训练 pause/checkpoint 后在本机执行本脚本；或用 -Watch 定时轮询远端 mtime。
+  - 默认在拉取前 **暂停远端训练**（remote_pause_lifers_train.sh，与 push / UI 同步一致）；-SkipTrainPause 跳过。
+  - Watch 模式下每次轮询前也会 pause（避免与写权重竞争）；短间隔可配 -SkipTrainPause。
 #>
 param(
     [string] $KaliUser = "kali",
     [string] $KaliHost = "192.168.234.152",
     [string] $RemoteBrain = "/home/kali/lifers/lifers_brain",
+    [string] $SshKey = "$env:USERPROFILE\.ssh\id_ed25519",
     [switch] $Force,
     [switch] $IncludeTinyBackup,
     [switch] $IncludeCheckpoints,
     [switch] $Watch,
-    [int] $WatchIntervalSec = 0
+    [int] $WatchIntervalSec = 0,
+    [switch] $SkipTrainPause
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,8 +44,37 @@ if ($Watch) {
 $sshTarget = "${KaliUser}@${KaliHost}"
 $rw = "$RemoteBrain/weights"
 
+$sshOpts = @("-o", "BatchMode=yes", "-o", "ConnectTimeout=30")
+if (Test-Path -LiteralPath $SshKey) {
+    $sshOpts = @("-i", $SshKey) + $sshOpts
+}
+
+function Invoke-RemotePauseTrain {
+    if ($SkipTrainPause) { return }
+    Write-Host "=== pause remote training before weight pull (remote_pause_lifers_train.sh) ===" -ForegroundColor Cyan
+    $pauseSrc = Join-Path $PSScriptRoot "remote_pause_lifers_train.sh"
+    if (-not (Test-Path -LiteralPath $pauseSrc)) {
+        Write-Warning "missing $pauseSrc — skip remote pause"
+        return
+    }
+    $tmpPause = Join-Path $env:TEMP "lifers_remote_pause_before_weights.sh"
+    Copy-Item $pauseSrc $tmpPause -Force
+    $enc = New-Object System.Text.UTF8Encoding $false
+    $txt = ([IO.File]::ReadAllText($tmpPause) -replace "`r`n", "`n")
+    [IO.File]::WriteAllText($tmpPause, $txt, $enc)
+    & scp @sshOpts $tmpPause "${sshTarget}:/tmp/lifers_remote_pause_before_weights.sh"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "scp pause script failed $LASTEXITCODE (continuing)"
+        return
+    }
+    & ssh @sshOpts $sshTarget "bash /tmp/lifers_remote_pause_before_weights.sh" 2>&1 | Write-Host
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warning "remote pause SSH exited $LASTEXITCODE (continuing pull)"
+    }
+}
+
 function Invoke-Ssh([string] $Cmd) {
-    $out = & ssh -o BatchMode=yes -o ConnectTimeout=30 $sshTarget $Cmd 2>&1
+    $out = & ssh @sshOpts $sshTarget $Cmd 2>&1
     if ($LASTEXITCODE -ne 0) { throw "ssh failed: $out" }
     return $out
 }
@@ -78,7 +111,7 @@ function Scp-File([string] $Rel, [string] $WeightsDir) {
     $src = "${sshTarget}:$rw/$Rel".Replace("\", "/")
     $dst = Join-Path $WeightsDir (Split-Path $Rel -Leaf)
     Write-Host "scp -C $Rel ..."
-    & scp -C -o BatchMode=yes -o ConnectTimeout=60 $src $dst
+    & scp @sshOpts -C -o ConnectTimeout=60 $src $dst
     if ($LASTEXITCODE -ne 0) { throw "scp failed for $Rel" }
 }
 
@@ -89,6 +122,8 @@ function Sync-LifersWeightsOnce {
     )
 
     New-Item -ItemType Directory -Force -Path $WeightsDir | Out-Null
+
+    Invoke-RemotePauseTrain
 
     Write-Host "=== Lifers weights sync from Kali ==="
     Write-Host "remote $RemoteWeightsPath"
@@ -123,7 +158,7 @@ function Sync-LifersWeightsOnce {
         Invoke-Ssh "test -d $RemoteWeightsPath/checkpoints && tar czf /tmp/lifers_ckpt.tgz -C $RemoteWeightsPath checkpoints || true" | Out-Null
         $has = Invoke-Ssh "test -f /tmp/lifers_ckpt.tgz && echo yes || echo no"
         if ($has -match "yes") {
-            & scp -C "${sshTarget}:/tmp/lifers_ckpt.tgz" $WeightsDir
+            & scp @sshOpts -C "${sshTarget}:/tmp/lifers_ckpt.tgz" $WeightsDir
             Push-Location $WeightsDir
             try { tar -xzf lifers_ckpt.tgz 2>$null } finally { Pop-Location }
             Remove-Item (Join-Path $WeightsDir "lifers_ckpt.tgz") -Force -ErrorAction SilentlyContinue

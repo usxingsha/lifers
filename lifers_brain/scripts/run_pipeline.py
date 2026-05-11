@@ -74,6 +74,7 @@ def main() -> None:
     }
     (root / "exp_pipeline_status.json").write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[pipeline] wrote exp_pipeline_status.json ok={ok}")
+    print("[pipeline] 下一步：python scripts/check_lifers_llm_ready.py（权重+vendor 树）；对话闭环说明见 config/lifers_llm_bootstrap.json")
 
 
 if __name__ == "__main__":

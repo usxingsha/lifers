@@ -226,18 +226,31 @@ def check_bridge_once() -> None:
         return
     env = os.environ.copy()
     env["LIFERS_ROOT"] = str(ROOT)
+    env.setdefault("PYTHONPATH", str(ROOT))
     env.setdefault("MODEL", "markov")
     env.setdefault("SANDBOX", "1")
     env.setdefault("LIFERS_TASKFLOW_LEARN", "0")
     raw = json.dumps({"text": "hi", "contextFiles": []}, ensure_ascii=False)
     cmd = [sys.executable, str(ROOT / "scripts" / "agent_bridge_once.py")]
-    p = subprocess.run(cmd, input=raw, text=True, capture_output=True, env=env, cwd=str(ROOT), timeout=120)
+    p = subprocess.run(
+        cmd,
+        input=raw,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        env=env,
+        cwd=str(ROOT),
+        timeout=120,
+    )
     if p.returncode != 0:
-        _fail(f"agent_bridge rc={p.returncode} stderr={p.stderr[:500]}")
+        err_tail = (p.stderr or "")[:500]
+        _fail(f"agent_bridge rc={p.returncode} stderr={err_tail}")
+    stdout = (p.stdout or "").strip()
     try:
-        out = json.loads(p.stdout.strip())
+        out = json.loads(stdout)
     except json.JSONDecodeError as e:
-        _fail(f"bridge json: {e} stdout={p.stdout[:400]}")
+        _fail(f"bridge json: {e} stdout={stdout[:400]}")
     if not out.get("ok"):
         _fail(f"bridge ok=false {out}")
     if not str(out.get("text", "")).strip():
@@ -290,13 +303,24 @@ def check_bridge_network_optional() -> None:
         return
     env = os.environ.copy()
     env["LIFERS_ROOT"] = str(ROOT)
+    env.setdefault("PYTHONPATH", str(ROOT))
     env["MODEL"] = "markov"
     env["SANDBOX"] = "0"
     env["LIFERS_TASKFLOW_LEARN"] = "0"
     raw = json.dumps({"text": "search lifers python test", "contextFiles": []}, ensure_ascii=False)
     cmd = [sys.executable, str(ROOT / "scripts" / "agent_bridge_once.py")]
-    p = subprocess.run(cmd, input=raw, text=True, capture_output=True, env=env, cwd=str(ROOT), timeout=180)
-    out = json.loads(p.stdout.strip())
+    p = subprocess.run(
+        cmd,
+        input=raw,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        env=env,
+        cwd=str(ROOT),
+        timeout=180,
+    )
+    out = json.loads((p.stdout or "").strip())
     if not out.get("ok"):
         _fail(f"network bridge: {out}")
     _ok("agent_bridge_once (web_search real network)")

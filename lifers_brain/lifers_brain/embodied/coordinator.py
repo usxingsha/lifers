@@ -1,7 +1,12 @@
-"""Physical step + vision + heuristic decision; respects weights/.train_control when enabled."""
+"""Physical step + vision + heuristic decision; respects weights/.train_control when enabled.
+
+多体 / NPC 扩展以 `stack.embodied_world.dynamic_npc` 与 `PhysWorld` 为准；入口仅本模块 +
+`scripts/embodied_tick_once.py`，不在 `LifersAgent` 或 taskflow 内重复物化 tick。
+"""
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, Tuple
@@ -73,15 +78,16 @@ def _heuristic_policy(vision: VisionSummary, world: PhysWorld) -> Tuple[float, f
 
 def run_embodied_tick(root: Path) -> Dict[str, Any]:
     cfg, world, ctrl = load_embodied_bundle(root)
+    now_ms = int(time.time() * 1000)
     if not (cfg.get("enabled") is True or str(cfg.get("enabled")).lower() == "true"):
-        return {"ok": True, "skipped": True, "reason": "embodied_world.enabled is false"}
+        return {"ok": True, "skipped": True, "reason": "embodied_world.enabled is false", "as_of_unix_ms": now_ms}
 
     ctl = control_file_path(root / "weights")
     mode = read_train_control(ctl)
     if mode == "stop":
-        return {"ok": True, "skipped": True, "reason": "train_control=stop", "control": mode}
+        return {"ok": True, "skipped": True, "reason": "train_control=stop", "control": mode, "as_of_unix_ms": now_ms}
     if mode == "pause":
-        return {"ok": True, "skipped": True, "reason": "train_control=pause", "control": mode}
+        return {"ok": True, "skipped": True, "reason": "train_control=pause", "control": mode, "as_of_unix_ms": now_ms}
 
     dt = float(cfg.get("dt_sec") or 0.05)
     vision = observe(cfg, root)
@@ -103,6 +109,8 @@ def run_embodied_tick(root: Path) -> Dict[str, Any]:
         "body": world.to_dict()["body"],
         "policy": pol,
         "control": mode,
+        "as_of_unix_ms": int(time.time() * 1000),
+        "realtime_note": "物化步为当次 tick 的快照；与 Agents 对话时钟独立；dynamic_npc 多体未接时仅单刚体。",
     }
 
 

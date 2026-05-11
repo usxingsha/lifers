@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Read rs/config/integrated_layout.json and write VS Code multi-root workspace files (merge, not symlink).
+"""Read config/integrated_layout.json (portable root next to tools/) and write VS Code multi-root workspace files.
 
-Optional rs/config/workspace_custom.json:
+Optional config/workspace_custom.json:
 - Top-level keys except `folders` and `_*` merge into workspace settings (deep-merge for dicts).
 - If `folders` is a non-empty array of {name, path}, it replaces roots from integrated_layout.
 """

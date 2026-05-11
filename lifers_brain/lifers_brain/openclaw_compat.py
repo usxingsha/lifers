@@ -5,6 +5,8 @@
 可选 `use_external_openclaw_runtime`：若你本机另行安装 OpenClaw，才注入 OPENCLAW_WORKSPACE 等桥接 env。
 
 compat_ref 由 scripts/sync_openclaw_release.py 对照 GitHub latest release 更新（本地镜像，非安装上游）。
+
+**与 Lifers 本体 LLM 去重**：进程内对话只走 LocalBrain；索引见 **config/lifers_llm_bootstrap.json**（claw-code / openclaw 均为 vendor 对照，非推理运行时）。
 """
 
 from __future__ import annotations

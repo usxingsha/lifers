@@ -8,7 +8,7 @@
   "lifers.gatePort": 55555,
   "lifers.httpDirect": true,
   "lifers.chatApiKeyEnv": "NVIDIA_API_KEY",
-  "lifers.bridgeTimeoutMs": 600000,
+  "lifers.bridgeTimeoutMs": 900000,
 
   "python.defaultInterpreterPath": "python",
   "python.terminal.activateEnvironment": true,

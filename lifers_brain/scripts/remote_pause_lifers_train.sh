@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # 写入 pause 到常见 brain 路径的 weights/.train_control（含 sudo 探测 /root 下目录）。
+# 由 Windows 侧 push_brain_and_loop_kali.ps1、sync_weights_from_kali.ps1、sync_lifers_agents_ui_windows_kali.ps1 在同步前 scp 调用。
 set -euo pipefail
 LR="${LIFERS_ROOT:-$HOME/lifers}"
 for d in "$LR/lifers_brain" "$HOME/lifers_brain"; do

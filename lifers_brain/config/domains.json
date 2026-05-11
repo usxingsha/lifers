@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "description": "domain→tools mapping",
   "domains": [
     {
@@ -15,8 +15,8 @@
     {
       "id": "filesystem_ops",
       "label": "本地文件读写与补丁",
-      "tools": ["fs_read", "fs_write_patch"],
-      "notes": "Planner 根据路径触发 fs_read；写入有风险，默认 SANDBOX 约束。"
+      "tools": ["fs_read", "fs_write_patch", "lifers_workspace_write"],
+      "notes": "Planner 根据路径触发 fs_read；rel_write/workspace_write/self_write 首行口令 → lifers_workspace_write；写入受 SANDBOX 与 ToolSpec.risk_level 约束。"
     },
     {
       "id": "shell_ops",
@@ -31,6 +31,18 @@
       "notes": "SANDBOX=1 时 web_search 等为模拟；真实网络请 SANDBOX=0。"
     },
     {
+      "id": "realtime_environment",
+      "label": "时钟·天气·地图（本机或出站 HTTP）",
+      "tools": ["real_world"],
+      "notes": "Planner.plan_real_world_instinct 产出；与 CHAT_QUICK 内 `_inject_realtime_spacetime_context` 文本注入互补；数据源含本机时钟、wttr.in、Nominatim。"
+    },
+    {
+      "id": "hybrid_kb_web",
+      "label": "记忆优先再联网（智搜 / 双通道）",
+      "tools": ["kb_search", "web_search"],
+      "notes": "用户前缀 smart/智搜 由 agent._step_core 编排；流程…/workflow … 由 Planner.plan 固定两步。勿在配置中重复实现编排代码。"
+    },
+    {
       "id": "memory_kb",
       "label": "长期记忆 / 知识库",
       "tools": ["kb_upsert", "kb_search", "kb_prune", "kb_compact"],
@@ -40,7 +52,7 @@
       "id": "vision_embodied_stub",
       "label": "视觉与物理操作（当前为占位/仿真接口）",
       "tools": ["sense_snapshot", "motion_plan", "motion_execute", "manipulate", "safety_stop", "sim_run"],
-      "notes": "sense_snapshot 等为可替换桩：接摄像头/机械臂/桌面控制需另行实现或经 cmd_run 调用外部程序。"
+      "notes": "与 lifers_brain/tools.py 中对应 Tool 名一致；sense_snapshot 等为可替换桩：接摄像头/机械臂/桌面控制需另行实现或经 cmd_run 调用外部程序。"
     },
     {
       "id": "openclaw_bridge",

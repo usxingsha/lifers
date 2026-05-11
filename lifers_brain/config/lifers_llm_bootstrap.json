@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "description_zh": "Lifers 进程内「用户话→助手答」只依赖 lifers_brain（LocalBrain + weights + taskflow/bridge）。third_party/openclaw 与 third_party/claw_code_rust 为上游源码/能力清单对照，不提供本进程推理，也不替代 stack.brain。",
+  "description_en": "In-process chat uses lifers_brain only; vendor trees are reference-only.",
+  "runtime_chain_zh": [
+    "stdin JSON / lifers_gate → bridge_turn.lifers_turn → apply_stack_env",
+    "LIFERS_TASKFLOW=1 → orchestrator → dialogue_router → handlers → LifersAgent.quick_chat 或 step",
+    "LocalBrain.generate（MODEL=lifers|markov|transformer，权重见 brain.weights）",
+    "可选：stack.remote_infer + 密钥（与 OpenClaw 网关无关）"
+  ],
+  "weights_relative_to_brain_root": {
+    "markov": "weights/lifers_markov.json",
+    "transformer": "weights/lifers_transformer.json"
+  },
+  "vendor_reference_only": {
+    "openclaw_submodule": "third_party/openclaw",
+    "openclaw_manifests": [
+      "lifers_brain/config/openclaw_manifest.json",
+      "lifers_brain/config/openclaw_upstream_vendor.json"
+    ],
+    "claw_code_rust": "third_party/claw_code_rust",
+    "claw_manifest": "lifers_brain/config/claw_code_rust_vendor.json",
+    "dedupe_index": "lifers_brain/config/lifers_vendor_map.json"
+  },
+  "first_run_commands_zh": [
+    "cd lifers_brain && python scripts/run_pipeline.py",
+    "python scripts/check_lifers_llm_ready.py",
+    "python scripts/lifers_verify_config.py"
+  ],
+  "full_pipeline_index": "config/lifers_ai_pipeline.json"
+}

@@ -1,3 +1,5 @@
+# 联运布局（须跟踪）：config/integrated_layout.json — 勿添加误伤整条 config/ 的忽略规则
+
 # Optional NTFS junction to sibling ../lifers — created by tools/link_lifers_app.ps1
 /lifers
 

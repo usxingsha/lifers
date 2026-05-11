@@ -2,7 +2,7 @@
   "version": 1,
   "primary": "lifers",
   "description": "CN: 便携根目录名 lifers（与 GitHub 仓一致）；默认工作区见 workspace_settings；本机覆盖 config/workspace_custom.json（勿提交）。 | EN: Portable root folder lifers; defaults in workspace_settings; local overlay config/workspace_custom.json (do not commit).",
-  "philosophy": "CN: 默认多根首项为 ./rs0；第二根为整仓根（文件夹名 lifers）；智脑为 lifers_brain。由本文件物化 lifers.code-workspace（并写 rs.code-workspace 兼容副本）。 | EN: Folders: rs0, portable root (lifers), lifers_brain; materialize lifers.code-workspace + rs.code-workspace alias.",
+  "philosophy": "CN: 默认多根首项为 ./rs0（可选空目录）；第二根为便携根；智脑为 lifers_brain。由本文件物化 lifers.code-workspace（单一工作区文件）。 | EN: Folders: rs0 (optional), portable root, lifers_brain; materialize lifers.code-workspace only.",
   "roots": [
     {
       "id": "rs0_workspace",
@@ -70,7 +70,7 @@
     "lifers.autoCreateSessionOnStart": true,
     "lifers.contextMaxFiles": 48,
     "lifers.bridgeContextMaxFiles": 32,
-    "lifers.bridgeTimeoutMs": 600000,
+    "lifers.bridgeTimeoutMs": 900000,
     "lifers.contextFolderMaxCollect": 96,
     "lifers.contextFolderMaxDepth": 6,
     "lifers.contextFolderSkipDirs": [
@@ -115,9 +115,12 @@
     "materialize_if_layout_newer_than": "lifers.code-workspace",
     "remove_if_present": [],
     "cli_deploy": "tools/bootstrap_lifers.ps1",
-    "cli_deploy_note": "CN: bootstrap_lifers.ps1 = materialize + run_integrated_bootstrap.py(prune) + install_agents + 推荐扩展 + sync_cursor_settings_to_vscodium + 可选 link_lifers_app + smoke | EN: Same pipeline; bootstrap_rs.ps1 forwards here."
+    "cli_deploy_note": "CN: bootstrap_lifers.ps1 = materialize + run_integrated_bootstrap.py(prune) + install_agents + 推荐扩展 + sync_cursor_settings_to_vscodium + 可选 link_lifers_app + smoke | EN: Same portable bootstrap pipeline.",
+    "llm_health_cli": "lifers_brain/scripts/check_lifers_llm_ready.py",
+    "llm_bootstrap_config": "lifers_brain/config/lifers_llm_bootstrap.json",
+    "ai_pipeline_config": "lifers_brain/config/lifers_ai_pipeline.json"
   },
-  "workspace_outputs": ["lifers.code-workspace", "rs.code-workspace"],
+  "workspace_outputs": ["lifers.code-workspace"],
   "workspace_custom_file": "config/workspace_custom.json",
   "workspace_custom_example": "config/workspace_custom.example.json"
 }

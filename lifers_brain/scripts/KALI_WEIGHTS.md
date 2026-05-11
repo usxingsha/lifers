@@ -62,6 +62,10 @@ bash ~/lifers/lifers_brain/scripts/kali_install_full_train.sh /path/to/lifers_ka
 
 更激进（耗时更长）：`LIFERS_KALI_TRAIN_MODE=extreme bash .../kali_install_full_train.sh`
 
+### `iter 14/999999` 是不是「从头训练」？
+
+不是「从随机权重第 1 个 epoch 重来」的意思。`train_lifers_escalate.py` 里 **`iter N` 是 ramp 档位**（每档增大词表 / `d_model` / `steps` 等），`999999` 是 `LIFERS_RAMP_MAX_ITERS` 的安全上限。若已有 `weights/lifers_transformer.json` 且与当前 ramp 形状一致，会 **warm-start 并打印 `resume tier iter …`**；若语料或 `LIFERS_ESCALATE_*` 与权重不匹配，会 **从 tier 1 冷启动**（日志里会有说明）。单次 Python 进程内会连续跑多档，直到 OOM、`stop`、或你 `pause`。
+
 可选：训练完成后注册 **用户 systemd 开机再跑一遍**（会覆盖 `weights/*.json`，适合你想每次开机刷新权重的场景）：
 
 ```bash
@@ -103,8 +107,9 @@ Kali 本机一页版（随仓库同步）：**`scripts/LIFERS_KALI_CHEATSHEET_zh
 |------|------|
 | 看训练 | `tmux attach -t lifers-stack` |
 | 看日志 | `tail -f ~/lifers/lifers_full_stack.log` |
-| 暂停 / 继续 / 停 | `cd ~/lifers/lifers_brain` → `bash scripts/lifers_train_ctl.sh` + 参数 `pause` / `run` / `stop` |
-| Windows 推代码并带跑循环 | `powershell -File scripts\push_brain_and_loop_kali.ps1` |
+| 暂停 / 继续 / 停 | `cd ~/lifers/lifers_brain` → `bash scripts/lifers_train_ctl.sh` + 参数 `pause` / `run` / `stop`；多路径同停可用 `bash /tmp/remote_pause_lifers_train.sh`（与 Windows 同步脚本一致） |
+| Windows 推代码并带跑循环 | `powershell -File scripts\push_brain_and_loop_kali.ps1`（**先** `remote_pause_lifers_train.sh` 暂停，再 scp 解压；`-SkipPauseTrainFirst` 可跳过） |
+| Windows 从 Kali 拉权重 | `.\sync_weights_from_kali.ps1`（**先** 远端 pause；`-SkipTrainPause` 跳过） |
 | 停旧 tmux、备份主权重、合并 checkpoint（若有） | `bash scripts/remote_stop_old_merge_weights.sh` |
 | 能力队列 | `python3 scripts/lifers_capability_queue.py` 子命令 `show` / `env` / `advance` |
 

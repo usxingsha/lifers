@@ -18,6 +18,36 @@ class DialogueRouterTests(unittest.TestCase):
         self.assertEqual(r.reason, "daily_chat_quick")
         self.assertIn("日常", r.notes_zh)
 
+    def test_assistant_meta_intent(self) -> None:
+        r = infer_dialogue_route("能做什么", False, emit=False)
+        self.assertEqual(r.kind, TaskKind.CHAT_QUICK)
+        self.assertEqual(r.reason, "assistant_meta_intent")
+        self.assertTrue(r.debug and r.debug.get("assistant_meta"))
+
+    def test_assistant_meta_ni_zuo_shen_me(self) -> None:
+        r = infer_dialogue_route("你做什么", False, emit=False)
+        self.assertEqual(r.kind, TaskKind.CHAT_QUICK)
+        self.assertEqual(r.reason, "assistant_meta_intent")
+
+    def test_build_game_routes_full_pipeline(self) -> None:
+        r = infer_dialogue_route("做一个飞机大战游戏", False, emit=False)
+        self.assertEqual(r.kind, TaskKind.FULL_PIPELINE)
+        self.assertEqual(r.reason, "build_or_code_project")
+
+    def test_build_game_with_de_routes_full_pipeline(self) -> None:
+        r = infer_dialogue_route("做一个飞机大战的游戏", False, emit=False)
+        self.assertEqual(r.kind, TaskKind.FULL_PIPELINE)
+        self.assertEqual(r.reason, "build_or_code_project")
+
+    def test_build_game_en_routes_full_pipeline(self) -> None:
+        r = infer_dialogue_route("make a small game", False, emit=False)
+        self.assertEqual(r.kind, TaskKind.FULL_PIPELINE)
+        self.assertEqual(r.reason, "build_or_code_project")
+
+    def test_negated_build_not_build_route(self) -> None:
+        r = infer_dialogue_route("不要做一个游戏", False, emit=False)
+        self.assertNotEqual(r.reason, "build_or_code_project")
+
     def test_explicit_search(self) -> None:
         r = infer_dialogue_route("search  rust async", False, emit=False)
         self.assertEqual(r.kind, TaskKind.WEB_SEARCH)

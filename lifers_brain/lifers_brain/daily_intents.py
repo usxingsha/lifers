@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from typing import Optional, Tuple
+
+# 否定 + 随后出现「做/写/游戏…」等：避免把「不要写游戏」误判为开发请求。
+_BUILD_NEG = re.compile(
+    r"(不要|请勿|别做|别写|不做|不写|取消)(?:.{0,24}(写|做|实现|开发|创建|搭建|游戏|程序|项目|网站|应用|脚本))",
+    re.UNICODE,
+)
 
 
 def cn_web_query_line(text: str) -> Optional[str]:
@@ -23,6 +30,46 @@ def cn_web_query_line(text: str) -> Optional[str]:
         q = s[1:].strip()
         return q or None
     return None
+
+
+def looks_like_build_or_code_request(text: str) -> bool:
+    """实现 / 开发 / 做游戏或小型项目：宜走完整管线（Planner + 工具链），而非 CHAT_QUICK。"""
+    s = text.strip()
+    if not s or len(s) > 280:
+        return False
+    if _BUILD_NEG.search(s):
+        return False
+    low = s.lower()
+    verbs = ("做", "写", "实现", "开发", "创建", "搭建", "生成", "弄", "编个", "写个", "给个")
+    nouns = (
+        "游戏",
+        "程序",
+        "软件",
+        "网站",
+        "网页",
+        "应用",
+        "项目",
+        "脚本",
+        "插件",
+        "组件",
+        "页面",
+        "接口",
+        "贪吃蛇",
+        "俄罗斯方块",
+        "飞机大战",
+    )
+    v_hit = any(x in s for x in verbs)
+    n_hit = any(x in s for x in nouns)
+    if v_hit and n_hit:
+        return True
+    if s.startswith(("做个", "写一个", "写个", "做一个", "搞个", "弄个", "来做个", "来做一个")):
+        if n_hit or "小程序" in s or "html" in low or "css" in low or "script" in low:
+            return True
+    en_stems = ("build a ", "build an ", "make a ", "create a ", "implement ", "develop a ", "code a ")
+    if any(low.startswith(st) for st in en_stems):
+        if any(k in low for k in (" game", " app", " site", " script", " api", " program")):
+            return True
+    return False
 
 
 def looks_like_rewrite_or_longform(text: str) -> bool:

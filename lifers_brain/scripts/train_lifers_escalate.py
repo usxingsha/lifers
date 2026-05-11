@@ -13,6 +13,11 @@ Ramp TinyTransformer training until rough float-param budget or MemoryError.
   copy weights/checkpoints/chunk_{N}B_*.json, append manifest, run LIFERS_POST_CHECKPOINT_CMD if set.
 - LIFERS_PAUSE_ON_CHECKPOINT=1: after any new B-floor checkpoint(s) and post-cmd, write control=pause so you can
   sync editors / pull artifacts; set run again to continue (no fixed “tier cap” — use LIFERS_ESCALATE_UNLIMITED).
+- LIFERS_ESCALATE_MAX_TIER=N: never **start** training for ramp display iter > N (1-based, same as log `iter K/...`).
+  Use on low-RAM hosts to stay at e.g. tier 16 instead of OOM on the next growth step (~38M→~68M params is typical).
+- LIFERS_ESCALATE_PAUSE_ON_MEMERROR: default 1 — on MemoryError write control=pause so `kali_train_escalate_loop.sh`
+  does not immediately restart and re-run the same resume tier (looks like “tier 16 twice forever”). Set 0 to keep
+  hot-loop retry.
 - LIFERS_TRAIN_SUITE_DIR: optional corpus directory (jsonl). Default eval/suites/v001. Use with capability queue script.
 """
 from __future__ import annotations
@@ -120,6 +125,18 @@ def _infer_resume_tier(
     if not matches:
         return None
     return max(matches, key=lambda x: x[0])
+
+
+def _escalate_max_tier_display() -> int:
+    """Max ramp iter to start (1-based, matches printed `iter K/...`). 0 = no cap."""
+    raw = os.environ.get("LIFERS_ESCALATE_MAX_TIER", "").strip()
+    if not raw:
+        return 0
+    try:
+        n = int(raw)
+        return max(0, n)
+    except ValueError:
+        return 0
 
 
 def rough_param_estimate(max_vocab: int, d_model: int, d_ff: int, max_seq: int) -> float:
@@ -273,6 +290,17 @@ def main() -> int:
                 f"Vcap={max_vocab} D={d_model} F={d_ff} S={max_seq} steps={steps} (warm-start from {out.name})",
                 flush=True,
             )
+        else:
+            print(
+                f"[lifers-escalate] note: {out.name} exists but shape does not match current ramp schedule "
+                f"(corpus/vocab changed or LIFERS_ESCALATE_* env differs) — cold start from tier 1. "
+                f"To ignore file: move it aside or set LIFERS_ESCALATE_RESUME=0.",
+                flush=True,
+            )
+    elif out.is_file() and not resume_on:
+        print("[lifers-escalate] LIFERS_ESCALATE_RESUME=0 — cold start (existing weights will be overwritten).", flush=True)
+    elif not out.is_file():
+        print("[lifers-escalate] no weights file yet — cold start from tier 1.", flush=True)
 
     tgt_msg = "∞ (no target cap)" if not math.isfinite(target) else f"{target_b_disp}B"
     print(
@@ -289,6 +317,13 @@ def main() -> int:
         message="see weights/.train_status.json for live progress",
     )
 
+    max_tier_cap = _escalate_max_tier_display()
+    if max_tier_cap > 0:
+        print(
+            f"[lifers-escalate] LIFERS_ESCALATE_MAX_TIER={max_tier_cap} — will not start training past that tier.",
+            flush=True,
+        )
+
     last_err: str | None = None
     for it in range(start_it, max_iters):
         mode = read_train_control(ctl_path)
@@ -302,6 +337,16 @@ def main() -> int:
             if read_train_control(ctl_path) == "stop":
                 print("[lifers-escalate] control=stop while paused — exit.", flush=True)
                 break
+
+        tier_display = it + 1
+        if max_tier_cap > 0 and tier_display > max_tier_cap:
+            print(
+                f"[lifers-escalate] stop: tier {tier_display} exceeds LIFERS_ESCALATE_MAX_TIER={max_tier_cap} "
+                f"(holds last weights; avoids OOM on small RAM). Add RAM/swap, raise cap, or tune ramp env, then "
+                f"lifers_train_ctl.sh run.",
+                flush=True,
+            )
+            break
 
         est = rough_param_estimate(max_vocab, d_model, d_ff, max_seq)
         print(
@@ -367,6 +412,20 @@ def main() -> int:
         except MemoryError:
             last_err = "MemoryError"
             print("[lifers-escalate] MemoryError — stopping ramp, keeping last successful weights file.", flush=True)
+            pause_mem = os.environ.get("LIFERS_ESCALATE_PAUSE_ON_MEMERROR", "1").strip().lower() not in (
+                "0",
+                "false",
+                "no",
+                "off",
+            )
+            if pause_mem:
+                write_train_control(ctl_path, "pause")
+                print(
+                    "[lifers-escalate] wrote control=pause (LIFERS_ESCALATE_PAUSE_ON_MEMERROR default on) so the "
+                    "outer train loop will not instantly restart into the same resume tier. "
+                    "Tip: export LIFERS_ESCALATE_MAX_TIER=16 to cap ramp on ~5GiB RAM hosts.",
+                    flush=True,
+                )
             break
         except Exception as e:
             last_err = str(e)

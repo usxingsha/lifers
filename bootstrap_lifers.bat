@@ -1,3 +1,3 @@
 @echo off
-REM Portable root bootstrap (same as bootstrap_rs.bat)
+REM Portable root bootstrap (lifers.code-workspace + Agents UI + 推荐扩展)
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\bootstrap_lifers.ps1" %*

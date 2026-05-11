@@ -236,6 +236,18 @@ def _brain_line(agent: Any, prompt: str, icfg: Dict[str, Any]) -> str:
     if not icfg["use_local_brain_for_instincts"]:
         return ""
     try:
+        br = getattr(agent, "brain", None)
+        if br is not None and getattr(br, "model", "") == "transformer":
+            try:
+                mb = int(br._weights_path().stat().st_size) // (1024 * 1024)
+            except OSError:
+                mb = 0
+            cap = int(os.environ.get("LIFERS_INSTINCT_TRANSFORMER_MAX_MB", "96").strip() or "96")
+            if cap > 0 and mb >= cap:
+                return "（本能）大体积 transformer 权重下跳过内心独白/微反思生成（可调 LIFERS_INSTINCT_TRANSFORMER_MAX_MB）。"
+    except Exception:
+        pass
+    try:
         out = agent.brain.generate(prompt).strip()
         if "(missing weights)" in out:
             return "（本能）本地权重未就绪；跳过生成。"

@@ -11,9 +11,10 @@ import sys
 from dataclasses import dataclass
 from typing import Any, Dict
 
-from lifers_brain.agent import Planner
+from lifers_brain.agent import Planner, _META_CAP_SHORT, _META_SELF_RE
 from lifers_brain.daily_intents import (
     cn_web_query_line,
+    looks_like_build_or_code_request,
     looks_like_rewrite_or_longform,
     looks_like_remember_or_todo_surface,
     parse_workspace_write_message,
@@ -31,6 +32,32 @@ class DialogueRoute:
     notes_zh: str = ""
     confidence: float = 1.0
     debug: Dict[str, Any] | None = None
+
+
+def _emit_route_coarse(bucket: str, signals: list[str]) -> None:
+    """正式 dialogue_route 分支前的粗粒度桶（审计用，不等价于最终 TaskKind）。"""
+    line = "LIFERS_PROGRESS route_coarse " + json.dumps({"bucket": bucket, "signals": signals}, ensure_ascii=False)
+    sys.stderr.write(line + "\n")
+    sys.stderr.flush()
+
+
+def _coarse_intent_hint(s: str, low: str) -> None:
+    if low.startswith("search ") or cn_web_query_line(s):
+        _emit_route_coarse("tool_or_web", ["search_or_cn_query"])
+        return
+    if low.startswith("cmd "):
+        _emit_route_coarse("shell", ["explicit_cmd"])
+        return
+    if "http://" in s or "https://" in s:
+        _emit_route_coarse("fetch", ["url_in_text"])
+        return
+    if parse_workspace_write_message(s):
+        _emit_route_coarse("workspace_write", ["workspace_write_surface"])
+        return
+    if looks_like_build_or_code_request(s) or looks_like_rewrite_or_longform(s) or looks_like_remember_or_todo_surface(s):
+        _emit_route_coarse("full_pipeline_likely", ["longform_or_build_or_remember"])
+        return
+    _emit_route_coarse("chat_or_planner", ["dialogue_router"])
 
 
 def _emit_progress(route: DialogueRoute) -> None:
@@ -63,6 +90,7 @@ def infer_dialogue_route(user_text: str, has_context_prefix: bool, *, emit: bool
 
     s = user_text.strip()
     low = s.lower()
+    _coarse_intent_hint(s, low)
 
     def ok(k: TaskKind, reason: str, notes_zh: str = "", **dbg: Any) -> DialogueRoute:
         r = DialogueRoute(kind=k, reason=reason, notes_zh=notes_zh, debug=dbg if dbg else None)
@@ -93,6 +121,21 @@ def infer_dialogue_route(user_text: str, has_context_prefix: bool, *, emit: bool
             TaskKind.FULL_PIPELINE,
             "rewrite_remember_or_longform",
             "长文改写 / 备忘待办表面 / 长形输入：走完整管线。",
+        )
+    if looks_like_build_or_code_request(s):
+        return ok(
+            TaskKind.FULL_PIPELINE,
+            "build_or_code_project",
+            "实现 / 开发 / 做游戏或项目类：走完整管线以启用工具链与多步规划。",
+        )
+
+    # 与 agent `_quick_chat_meta_capability_reply` 对齐：主流对话里常见的 intent≈assistant_meta。
+    if _META_SELF_RE.search(s) or _META_CAP_SHORT.match(s):
+        return ok(
+            TaskKind.CHAT_QUICK,
+            "assistant_meta_intent",
+            "问助手能力或身份：仍走 CHAT_QUICK，由本地说明模板作答（不当作泛检索）。",
+            assistant_meta=True,
         )
 
     p = Planner()

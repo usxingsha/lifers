@@ -118,6 +118,41 @@ def main() -> int:
             drift = verify_upstream_drift(ocfg)
             if drift:
                 out["warnings"].append(drift)
+
+        emb = loaded.get("embodied_world") or {}
+        if isinstance(emb, dict):
+            dn = emb.get("dynamic_npc") if isinstance(emb.get("dynamic_npc"), dict) else {}
+            out["embodied_world"] = {
+                "enabled": bool(emb.get("enabled")),
+                "state_relpath": emb.get("state_relpath"),
+                "dynamic_npc_enabled": bool(dn.get("enabled")),
+                "tick_script": "scripts/embodied_tick_once.py",
+            }
+
+        from lifers_brain.tools import build_default_registry
+
+        reg = build_default_registry()
+        tnames = sorted(s.name for s in reg.list_specs())
+        out["tool_registry"] = {
+            "count": len(tnames),
+            "names": tnames,
+            "source": "lifers_brain/tools.py build_default_registry",
+        }
+
+        pipe_p = root / "config" / "lifers_ai_pipeline.json"
+        if pipe_p.is_file():
+            try:
+                pj = json.loads(pipe_p.read_text(encoding="utf-8"))
+                stages = pj.get("stages") if isinstance(pj.get("stages"), list) else []
+                out["ai_pipeline"] = {
+                    "map_relpath": "config/lifers_ai_pipeline.json",
+                    "stage_count": len(stages),
+                    "stage_ids": [s.get("id") for s in stages if isinstance(s, dict)],
+                }
+            except json.JSONDecodeError:
+                out["warnings"].append("config/lifers_ai_pipeline.json：JSON 损坏")
+        else:
+            out["warnings"].append("缺少 config/lifers_ai_pipeline.json（输入→输出全链路索引）")
     except Exception as e:
         out["errors"].append(f"stack_env: {e}")
 

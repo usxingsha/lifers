@@ -1222,7 +1222,9 @@ class LifersAgentsController {
   <div>
     <h1><img class="lifers-brand-img cp-brand-img" src="${iconUri}" width="22" height="22" alt="" /> Lifers 总控（Kali 算力 + 同步）</h1>
     <p class="hint">依赖本机 <code>ssh</code>；路径在设置 <code>lifers.kaliSshPrefix</code>、<code>lifers.kaliBrainPath</code>。
-    底部同一栏另有「会话建立」树。物化闭环在仓库：<code>scripts/embodied_tick_once.py</code> + <code>stack.embodied_world</code>（先 pause 再同步）。</p>
+    底部同一栏另有「会话建立」树。物化闭环在仓库：<code>scripts/embodied_tick_once.py</code> + <code>stack.embodied_world</code>（<code>dynamic_npc</code> 仅占位；多体待扩展；先 pause 再同步；tick 会尊重 <code>weights/.train_control</code> 的 pause/stop）。对话路由/推理链说明见 <code>lifers_brain/taskflow/FLOW.md</code>；本机烟测 <code>python scripts/verify_edge_agent_pipeline.py</code>。</p>
+    <p class="hint">边缘上 <code>lifers.model=lifers</code> 会加载大体积 <code>lifers_transformer.json</code>（首包可能数十秒级）；日常秒回可改 <strong>lifers.model = markov</strong>。亦可填 <code>lifers.edgeQuickSessionChars</code> / <code>edgeQuickPackChars</code> / <code>edgeQuickStackChars</code> 注入 <code>LIFERS_QUICK_*</code>；<code>lifers.edgeGenerateTimeoutSec</code>（非 0）映射 <code>LIFERS_QUICK_GENERATE_TIMEOUT_SEC</code>（POSIX 上本地 generate 墙钟，与外层 <code>lifers.bridgeTimeoutMs</code> 不同）。CHAT_QUICK 默认在回复末追加 <strong>【本轮·生成锚】</strong>（由 Bridge 注入 <code>LIFERS_AGENTS_UI_BRIDGE</code> 触发；可用 <code>LIFERS_QUICK_TIME_FOOTER=0</code> 关闭）。</p>
+    <p class="hint">「何时何地」：<code>lifers.geoLabel</code> 固定地名，或 <code>lifers.realtimeGeoQuick=true</code> 走 wttr.in 粗定位（与天气同源；可调 <code>LIFERS_REALTIME_GEO_CACHE_SEC</code>，下限约 30s）。每轮另有本机 <strong>【实时·时钟】</strong>；方案头含「上下文时效」，长期记忆段为库快照（非实时网）。</p>
     <div id="train-live" class="train-live" aria-live="polite">
       <div class="train-row"><span class="train-lbl">总进度(估)</span><progress id="p-overall" max="100" value="0"></progress><span id="t-overall" class="train-pct">—</span></div>
       <div class="train-row"><span class="train-lbl">SGD 本档</span><progress id="p-sgd" max="100" value="0"></progress><span id="t-sgd" class="train-pct">—</span></div>
@@ -1303,7 +1305,7 @@ class LifersAgentsController {
     const conf = vscode.workspace.getConfiguration('lifers');
     const custom = String(conf.get('windowsPackScpCommand') || '').trim();
     if (custom) {
-      const r = await execShell(custom, { cwd: root, timeout: 600000 });
+      const r = await execShell(custom, { cwd: root, timeout: 900000 });
       return `custom exit ${r.code}\n${r.stdout}\n${r.stderr}`;
     }
     const scriptPath = path.join(root, 'scripts', 'package_rs_for_kali.ps1');
@@ -1319,7 +1321,7 @@ class LifersAgentsController {
     ].join('; ');
     const r = await execShell(`powershell.exe -NoProfile -NonInteractive -Command ${JSON.stringify(ps)}`, {
       cwd: root,
-      timeout: 600000,
+      timeout: 900000,
     });
     return `pack+scp exit ${r.code}\n${r.stdout}\n${r.stderr}`;
   }
@@ -1457,10 +1459,23 @@ ${bodyInner}
   async _handleSend(root, text, sessionId, contextFiles) {
     const conf = vscode.workspace.getConfiguration('lifers');
     const py = resolveLifersPythonExecutable(conf.get('pythonPath'), root);
+    const modelTok = String(conf.get('model') || 'lifers').trim().toLowerCase();
     const sandbox = conf.get('sandbox') !== false;
     const httpDirect = conf.get('httpDirect') !== false;
+    const quickWeb = conf.get('quickWeb') === true;
+    const quickFast = conf.get('quickFast') !== false;
+    const quickSkipKb = conf.get('quickSkipKb') !== false;
+    const remoteChat = conf.get('remoteChat') === true;
+    const metaUseLocalBrain = conf.get('metaUseLocalBrain') === true;
+    const markovCap = Math.max(0, Math.floor(Number(conf.get('markovJsonMaxBytes')) || 0));
     const bridgeMax = Number(conf.get('bridgeContextMaxFiles')) || 32;
-    const timeoutMs = Math.max(5000, Number(conf.get('bridgeTimeoutMs')) || 600000);
+    const timeoutMs = Math.max(5000, Number(conf.get('bridgeTimeoutMs')) || 900000);
+    const edgeSess = Math.max(0, Math.floor(Number(conf.get('edgeQuickSessionChars')) || 0));
+    const edgePack = Math.max(0, Math.floor(Number(conf.get('edgeQuickPackChars')) || 0));
+    const edgeStack = Math.max(0, Math.floor(Number(conf.get('edgeQuickStackChars')) || 0));
+    const edgeGenSec = Math.max(0, Number(conf.get('edgeGenerateTimeoutSec')) || 0);
+    const geoLabel = String(conf.get('geoLabel') || '').trim();
+    const realtimeGeoQuick = conf.get('realtimeGeoQuick') === true;
 
     let data = this._readHistory(root);
     if (!data.sessions.length) {
@@ -1499,7 +1514,7 @@ ${bodyInner}
     const script = path.join(root, 'scripts', 'agent_bridge_once.py');
     if (!fs.existsSync(script)) {
       const msg =
-        '缺少 scripts/agent_bridge_once.py。请打开 lifers/lifers.code-workspace（或 rs.code-workspace / lifers_brain 文件夹）；仅打开 rs0 时设 lifers.brainPathOverride（如 /home/kali/lifers/lifers_brain）后 Reload Window。';
+        '缺少 scripts/agent_bridge_once.py。请打开 lifers/lifers.code-workspace 或 lifers_brain 文件夹；仅打开 rs0 时设 lifers.brainPathOverride（如 /home/kali/lifers/lifers_brain）后 Reload Window。';
       this._recordAssistantFailure(root, s.id, msg);
       this._postState(root);
       this._postReply({ type: 'reply', ok: false, error: msg });
@@ -1522,13 +1537,26 @@ ${bodyInner}
             PYTHONIOENCODING: 'utf-8',
             LIFERS_ROOT: root,
             SANDBOX: sandbox ? '1' : '0',
-            MODEL: 'lifers',
+            MODEL: modelTok === 'markov' ? 'markov' : 'lifers',
             LIFERS_FORCE_LOCAL_ONLY: '1',
+            LIFERS_AGENTS_UI_BRIDGE: '1',
             LIFERS_CONTEXT_MAX_FILES: String(bridgeMax),
             LIFERS_QUICK_CHAT_LEARN: '0',
             LIFERS_MICRO_THINK_EVERY: '999',
             LIFERS_MAX_SPEED: '1',
+            LIFERS_QUICK_WEB: quickWeb ? '1' : '0',
+            LIFERS_REMOTE_CHAT: remoteChat ? '1' : '0',
+            ...(quickFast ? { LIFERS_QUICK_FAST: '1' } : {}),
+            ...(quickSkipKb ? { LIFERS_QUICK_SKIP_KB: '1' } : {}),
+            ...(metaUseLocalBrain ? { LIFERS_QUICK_META_USE_LOCAL_BRAIN: '1' } : {}),
             ...(httpDirect ? { LIFERS_HTTP_DIRECT: '1' } : {}),
+            ...(markovCap > 0 ? { LIFERS_MARKOV_JSON_MAX_BYTES: String(markovCap) } : {}),
+            ...(edgeSess > 0 ? { LIFERS_QUICK_SESSION_CONTEXT_CHARS: String(edgeSess) } : {}),
+            ...(edgePack > 0 ? { LIFERS_QUICK_PACK_MAX_CHARS: String(edgePack) } : {}),
+            ...(edgeStack > 0 ? { LIFERS_QUICK_STACK_BODY_CHARS: String(edgeStack) } : {}),
+            ...(edgeGenSec > 0 ? { LIFERS_QUICK_GENERATE_TIMEOUT_SEC: String(edgeGenSec) } : {}),
+            ...(geoLabel ? { LIFERS_GEO_LABEL: geoLabel } : {}),
+            ...(realtimeGeoQuick ? { LIFERS_REALTIME_GEO_QUICK: '1' } : {}),
           },
         });
         let stdout = '';
@@ -1545,7 +1573,7 @@ ${bodyInner}
           }
           reject(
             new Error(
-              `Bridge 超时（>${timeoutMs / 1000}s）。可在设置 lifers.bridgeTimeoutMs 中延长；复杂任务请改用终端运行脚本。`
+              `Bridge 外层超时（>${timeoutMs / 1000}s）。设置 lifers.bridgeTimeoutMs 延长整次 Python 等待。若 stderr 出现 generate_local 且约 30～120s 即断，为内层 LIFERS_QUICK_GENERATE_TIMEOUT_SEC：设 lifers.edgeGenerateTimeoutSec（或环境变量）；复杂任务请用终端跑脚本。`
             )
           );
         }, timeoutMs);

@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""One embodied tick (physics + eyes + decision). Respects weights/.train_control pause/stop."""
+"""
+One embodied tick (physics + eyes + decision). Respects weights/.train_control pause/stop.
+
+与 Agents Chat / Bridge 并行：不读写会话 JSON；动态 NPC 多体扩展见 stack.embodied_world.dynamic_npc
+与 lifers_brain.embodied.coordinator（当前单 PhysBody）。
+"""
 from __future__ import annotations
 
 import argparse

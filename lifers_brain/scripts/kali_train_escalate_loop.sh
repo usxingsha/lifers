@@ -15,6 +15,11 @@ cd "$ROOT"
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 export LIFERS_ESCALATE_UNLIMITED="${LIFERS_ESCALATE_UNLIMITED:-1}"
+# Optional: copy scripts/kali_escalate_env.example.sh -> scripts/kali_escalate_env.sh on low-RAM hosts.
+if [[ -f "$ROOT/scripts/kali_escalate_env.sh" ]]; then
+  # shellcheck disable=SC1091
+  . "$ROOT/scripts/kali_escalate_env.sh"
+fi
 CTL="${LIFERS_TRAIN_CONTROL:-$ROOT/weights/.train_control}"
 mkdir -p "$(dirname "$CTL")"
 [[ -f "$CTL" ]] || printf 'run\n' >"$CTL"

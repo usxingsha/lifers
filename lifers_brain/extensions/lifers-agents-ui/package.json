@@ -2,7 +2,7 @@
   "name": "lifers-agents-ui",
   "displayName": "Lifers Agents Window",
   "description": "Lifers：Agents Chat + 会话建立（侧栏/资源管理器/底部总控）+ Kali 算力总控",
-  "version": "0.5.15",
+  "version": "0.5.28",
   "publisher": "lifers",
   "engines": {
     "vscode": "^1.85.0"
@@ -32,9 +32,9 @@
         },
         "lifers.model": {
           "type": "string",
-          "enum": ["lifers"],
+          "enum": ["lifers", "markov"],
           "default": "lifers",
-          "description": "固定为 lifers（与 stack.brain.model 一致）。推理用 weights/lifers_transformer.json。"
+          "description": "lifers=加载 weights/lifers_transformer.json（大文件在边缘 CPU 上首包可能较慢）；markov=字符级 lifers_markov.json，秒回/排障用。"
         },
         "lifers.sandbox": {
           "type": "boolean",
@@ -46,10 +46,75 @@
           "default": true,
           "description": "false=尊重系统代理。true=注入 LIFERS_HTTP_DIRECT=1 强制直连（减少 10061）。"
         },
+        "lifers.quickWeb": {
+          "type": "boolean",
+          "default": false,
+          "description": "CHAT_QUICK 下是否允许自动 web_search（注入 LIFERS_QUICK_WEB）。默认 false：本地优先，避免离线/无代理环境长时间卡住。"
+        },
+        "lifers.quickFast": {
+          "type": "boolean",
+          "default": true,
+          "description": "秒回：注入 LIFERS_QUICK_FAST=1（缩短 CHAT_QUICK 下 Markov 生成长度、收紧 prompt 截断上限）。关 false 时更利于长答但可能更慢。"
+        },
+        "lifers.quickSkipKb": {
+          "type": "boolean",
+          "default": true,
+          "description": "秒回：注入 LIFERS_QUICK_SKIP_KB=1，CHAT_QUICK 跳过长期记忆预检索（SQLite）。关 false 时仍会检索 KB，略慢。"
+        },
+        "lifers.edgeQuickSessionChars": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100000,
+          "description": "非 0：Bridge 注入 LIFERS_QUICK_SESSION_CONTEXT_CHARS（CHAT_QUICK 会话尾部上限）。0=用 agent 默认（transformer 约 4800）。"
+        },
+        "lifers.edgeQuickPackChars": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 250000,
+          "description": "非 0：注入 LIFERS_QUICK_PACK_MAX_CHARS（CHAT_QUICK 总 prompt 上限）。0=用 agent 默认。"
+        },
+        "lifers.edgeQuickStackChars": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100000,
+          "description": "非 0：注入 LIFERS_QUICK_STACK_BODY_CHARS（栈/运维 SYSTEM 前缀上限）。0=用 agent 默认。"
+        },
+        "lifers.edgeGenerateTimeoutSec": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 600,
+          "description": "非 0：Bridge 注入 LIFERS_QUICK_GENERATE_TIMEOUT_SEC（秒），覆盖 CHAT_QUICK 在 POSIX 上本地 transformer 的墙钟上限。0=不注入（沿用进程环境；未设环境变量时 agent 内建默认当前约 120s，export 为 0 可关闭该保护）。"
+        },
+        "lifers.geoLabel": {
+          "type": "string",
+          "default": "",
+          "description": "非空：注入 LIFERS_GEO_LABEL，每轮上下文出现【实时·定位】固定地名（如 长野县、Shanghai）。"
+        },
+        "lifers.realtimeGeoQuick": {
+          "type": "boolean",
+          "default": false,
+          "description": "true：注入 LIFERS_REALTIME_GEO_QUICK=1，按出口 IP 请求 wttr.in 粗定位（有缓存；与天气同源）。"
+        },
+        "lifers.metaUseLocalBrain": {
+          "type": "boolean",
+          "default": false,
+          "description": "「能做什么/你是谁」等元问题（assistant_meta_intent）：默认 false 走即时说明模板；true 则注入 LIFERS_QUICK_META_USE_LOCAL_BRAIN=1，改走大包上下文 + 本地权重生成（可能较慢）。"
+        },
+        "lifers.markovJsonMaxBytes": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10737418240,
+          "description": "Bridge 加载 lifers_markov.json 的最大字节数（注入 LIFERS_MARKOV_JSON_MAX_BYTES）。0=Python 默认 128MB。超大训练产物导致发中文卡住时，可调大或压缩权重。"
+        },
         "lifers.remoteChat": {
           "type": "boolean",
           "default": false,
-          "description": "保留项：扩展已向 Bridge 注入 LIFERS_FORCE_LOCAL_ONLY，Agents Chat 不走云端 chat/completions，无需 NVIDIA 等 API 密钥。联网检索用 lifers.sandbox=false + web_search。若你在终端手动跑 Python 且自行取消 FORCE_LOCAL，才可配合 stack.remote_infer（高级）。"
+          "description": "为 Bridge 显式设置 LIFERS_REMOTE_CHAT：默认 false（覆盖 shell 里误 export 的 1，减少「无密钥仍探测远程」日志与延迟）。true 仅在你明确要试 OpenAI 兼容 chat 时用；Agents Chat 仍注入 LIFERS_FORCE_LOCAL_ONLY=1 时不会走远程。联网检索用 lifers.sandbox=false + search …。"
         },
         "lifers.chatApiUrl": {
           "type": "string",
@@ -102,10 +167,10 @@
         },
         "lifers.bridgeTimeoutMs": {
           "type": "number",
-          "default": 600000,
+          "default": 900000,
           "minimum": 5000,
           "maximum": 3600000,
-          "description": "单次 Bridge（Python agent_bridge_once）最长等待毫秒数（默认 10min；远程冷启动/搜网易超时）。超时将终止子进程并提示。"
+          "description": "单次 Bridge（Python agent_bridge_once）外层最长等待毫秒数（默认 15min；与内层 LIFERS_QUICK_GENERATE_TIMEOUT_SEC 不同）。冷启动/联网检索/大 prompt 仍超时可再调高；超时将终止子进程并提示。"
         },
         "lifers.contextFolderMaxCollect": {
           "type": "number",

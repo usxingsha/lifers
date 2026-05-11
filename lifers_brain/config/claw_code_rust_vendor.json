@@ -41,7 +41,13 @@
     "no_cloud_api_in_stack_brain": true,
     "docs": [
       "third_party/claw_code_rust/LIFERS_MERGE.md",
-      "lifers_brain/config/openclaw_manifest.json"
+      "lifers_brain/config/openclaw_manifest.json",
+      "lifers_brain/config/lifers_llm_bootstrap.json"
+    ],
+    "dedupe_with": [
+      "lifers_brain/config/lifers_vendor_map.json#claw_code_rust",
+      "config/integrated_layout.json#claw_code_rust",
+      "openclaw_manifest.json#integration_domains.claw_code_rust"
     ]
   }
 }

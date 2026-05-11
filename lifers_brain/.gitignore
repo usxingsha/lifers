@@ -8,3 +8,4 @@ nvidia_api_local.env
 __pycache__/
 *.pyc
 tools/lifers_editor/extensions_dir/
+tools/lifers_gui_host/static/vendor/

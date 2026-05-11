@@ -1,7 +1,7 @@
 {
   "version": 1,
   "meta": {
-    "role_brain": "智脑：MODEL（lifers|markov|transformer）/SANDBOX/weights/memory_db/session/tool 上限",
+    "role_brain": "智脑：MODEL（lifers|markov|transformer）/SANDBOX/weights/memory_db/session/tool 上限；每轮注入【实时·时钟】；可选 brain.geo_label / realtime_geo_quick（或 LIFERS_GEO_LABEL、LIFERS_REALTIME_GEO_QUICK）注入粗定位。",
     "role_human_sim": "仿真人：persona_name + system_prompt_extra + local_lm_max_chars",
     "role_robot": "机器人：SIM_EXEC_CMD / ROBOT_SENSE_CMD / ROBOT_ACT_CMD（可由下方 *_exec_cmd 在启动时注入）",
     "apply_at": "scripts/run_agent.py、agent_bridge_once.py、run_pipeline.py 调用 apply_stack_env；若存在 便携根 config/integrated_layout.json 则同时执行整合引导（物化工作区、可选剪枝）",
@@ -13,7 +13,14 @@
     "claw_code_rust_vendor": "third_party/claw_code_rust：Kali 上权威对照为 ~/lifers/third_party/claw-code/rust（见 config/claw_code_rust_vendor.json、LIFERS_MERGE.md）；非 Lifers 运行时；不把其 HTTP/API 接入 stack。",
     "remote_infer": "stack.remote_infer：可选 NVIDIA Integrate 等 HTTPS；默认关闭（enabled=false）。启用云端时还须在环境中设 LIFERS_ALLOW_REMOTE_INFER=1 才会注入 LIFERS_REMOTE_CHAT（本地/Kali 权重无需此项）。",
     "lifers_gate": "HTTP 服务 scripts/lifers_gate.py（代号 lifers / 中文：终身监禁者）默认 127.0.0.1:55555；POST /v1/step 与 agent_bridge 同款 JSON。勿对公网绑定 0.0.0.0。",
-    "embodied_world": "stack.embodied_world：平面物理步进 + 视觉摘要 + 启发式决策；读同一 weights/.train_control（pause/stop/run）与训练对齐；CLI scripts/embodied_tick_once.py。"
+    "embodied_world": "stack.embodied_world：平面物理步进 + 视觉摘要 + 启发式决策；读同一 weights/.train_control（pause/stop/run）与训练对齐；CLI scripts/embodied_tick_once.py。动态 NPC：当前单刚体 body；多体/挤出 NPC 需扩展 PhysWorld + decision.policy 与 vision 源；cron 调 tick 前应先 pause 训练以免争用 CPU。",
+    "taskflow_rules_single_source": "对话 TaskKind 规则唯一入口：lifers_brain/taskflow/dialogue_router.py 与 lifers_brain/daily_intents.py；classify.py 仅 split_user_message + 委托 infer_dialogue_route，禁止在此重复写路由分支。",
+    "bridge_io_audit": "输入/输出 lifers_brain/bridge_turn.py；stderr：LIFERS_PROGRESS dialogue_route、taskflow_route、inference（inference_pipeline）；本地强制时 _strip_api_key_nag_when_local_only。边缘路由与 quick 体量烟测：scripts/verify_edge_agent_pipeline.py。详见 lifers_brain/taskflow/FLOW.md。",
+    "tools_registry_single_source": "可调用工具名与执行逻辑唯一在 lifers_brain/tools.py → build_default_registry()；config/domains.json 与 organ_capabilities.json 的 tools 数组仅作文档/领域映射。新增工具：实现 *Tool + register，再同步 domains/器官表，并跑 tests/test_tools_registry.py；lifers_verify_config.py 输出 tool_registry.names 供对账。",
+    "realtime_policy_zh": "每轮注入【实时·时钟】与可选【实时·定位】；real_world 天气/地图结果带 fetched_at_ms；长期记忆 LONGTERM_RECALL 标注检索时刻（库历史≠实时网）。粗定位缓存见 LIFERS_REALTIME_GEO_CACHE_SEC（秒，下限 30）。物化 tick 返回 as_of_unix_ms，与对话并行。CHAT_QUICK：LIFERS_AGENTS_UI_BRIDGE=1 时默认在可见回复末追加【本轮·生成锚】（LIFERS_QUICK_TIME_FOOTER=0 可关）。",
+    "llm_bootstrap_relpath": "config/lifers_llm_bootstrap.json",
+    "ai_pipeline_relpath": "config/lifers_ai_pipeline.json",
+    "upstream_vendor_dedupe_zh": "OpenClaw 子模块与清单：third_party/openclaw + openclaw_manifest.json + openclaw_upstream_vendor.json + stack.openclaw.compat_ref（sync_openclaw_release.py）。claw-code Rust：third_party/claw_code_rust + claw_code_rust_vendor.json + LIFERS_MERGE.md。总索引 lifers_vendor_map.json。均非 Lifers 进程内 LLM 运行时。"
   },
   "runtime": {
     "role": "auto",
@@ -27,6 +34,13 @@
     "session_max_turns": 8,
     "llm_identity_short": "Lifers",
     "llm_product_name": "Lifers-20B",
+    "geo_label": "",
+    "realtime_geo_quick": false,
+    "local_lm_sampling": {
+      "transformer": { "temperature": 0.72, "top_k": 40 },
+      "markov": { "temperature": 0.9, "top_k": 80 },
+      "note_zh": "TinyTransformer / Markov 采样默认；词表与网络宽度以权重 JSON（vocab、d_model 等）为准，无需单独 tokenizer 文件。"
+    },
     "weights": {
       "markov": "weights/lifers_markov.json",
       "transformer": "weights/lifers_transformer.json"
@@ -132,6 +146,10 @@
     "enabled": false,
     "dt_sec": 0.05,
     "state_relpath": "state/embodied_world.json",
+    "dynamic_npc": {
+      "enabled": false,
+      "note": "预留：多 NPC 时在 state 中存 agents[] 并由 coordinator 迭代 step；当前仅单 body。与 CHAT_QUICK 并行：物化 tick 不占 agent 会话。"
+    },
     "vision": {
       "enabled": false,
       "frame_source": "none",

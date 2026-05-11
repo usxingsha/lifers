@@ -2,17 +2,15 @@
 setlocal
 
 REM Launcher for VSCodium/VSCode shell replacement.
-REM Prefers "bundled shell" inside this rs root:
-REM   rs\shell\VSCodium\VSCodium.exe
-REM   rs\shell\VSCode\Code.exe
-REM Then falls back to user-installed locations.
+REM Bundled shell under portable root: shell\VSCodium\ / shell\VSCode\
+REM Then user-installed locations.
 
 set "ROOT=%~dp0"
-REM Prefer full-tree workspace (Agents UI + scripts resolve lifers / lifers_brain); fallback to folder open.
-if exist "%ROOT%rs.code-workspace" (
-  set "WORKSPACE=%ROOT%rs.code-workspace"
-) else if exist "%ROOT%lifers\scripts\agent_bridge_once.py" (
-  set "WORKSPACE=%ROOT%lifers"
+REM 1) Multi-root workspace  2) 便携根文件夹（含 lifers_brain） 3) 仅 brain
+if exist "%ROOT%lifers.code-workspace" (
+  set "WORKSPACE=%ROOT%lifers.code-workspace"
+) else if exist "%ROOT%lifers_brain\scripts\agent_bridge_once.py" (
+  set "WORKSPACE=%ROOT%"
 ) else (
   set "WORKSPACE=%ROOT%lifers_brain"
 )

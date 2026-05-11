@@ -17,7 +17,7 @@ $toolsDir = $PSScriptRoot
 $portableRoot = Split-Path -Parent $toolsDir
 Set-Location -LiteralPath $portableRoot
 
-Write-Host '== lifers materialize workspace (lifers.code-workspace + rs.code-workspace compat) =='
+Write-Host '== lifers materialize workspace (lifers.code-workspace) =='
 $mat = Join-Path $toolsDir 'materialize_integrated_workspace.py'
 if (-not (Test-Path -LiteralPath $mat)) { throw "Missing $mat" }
 python $mat
@@ -79,4 +79,4 @@ if (-not $SkipSmoke) {
 }
 
 Write-Host ''
-Write-Host 'Bootstrap OK. Open lifers\lifers.code-workspace (or lifers\rs.code-workspace). Portable: run_lifers_vscodium.bat -> data\extensions. Reload window if the editor was open.'
+Write-Host 'Bootstrap OK. Open lifers\lifers.code-workspace. Portable: run_lifers_vscodium.bat -> data\extensions. Reload window if the editor was open.'

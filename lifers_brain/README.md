@@ -1,6 +1,6 @@
 # Lifers
 
-Python 包名 **`lifers_brain`**；便携仓库根目录历史上曾名 **`rs`**，现工作区与配置统一以 **`lifers`** 为显示名（见 `config/integrated_layout.json`）。Offline local agent, tools, eval/sim stubs.
+Python 包名 **`lifers_brain`**；便携仓库根目录历史上曾名 **`rs`**，现工作区与配置统一以 **`lifers`** 为显示名（联运布局见便携根 **`../config/integrated_layout.json`**，物化 **`../lifers.code-workspace`**）。Offline local agent, tools, eval/sim stubs.
 
 **自测（会话分类 / CHAT_QUICK / Bridge JSON）**：在 **`lifers_brain`** 目录执行 `PYTHONPATH=. python -m unittest discover -s tests -p "test_*.py" -v`（见 `tests/test_session_dialogue.py`；不依赖 PyTorch）。
 
@@ -41,7 +41,7 @@ Python 包名 **`lifers_brain`**；便携仓库根目录历史上曾名 **`rs`**
 - **暂停去更新**：设 **`LIFERS_PAUSE_ON_CHECKPOINT=1`**，在新 B 档 checkpoint 落盘且 post-cmd 跑完后，自动把 **`weights/.train_control`** 写成 **`pause`**；你同步/打包/换机拉取后，再 **`lifers_train_ctl.sh run`**（或 `echo run > …/.train_control`）继续。**不限训练目标 B**：配合 **`LIFERS_ESCALATE_UNLIMITED=1`** + 大 **`LIFERS_RAMP_MAX_ITERS`**（见 `train_lifers_escalate.py` 文档字符串），直到 OOM 或手动 stop。
 - **跑完一段就切下一类能力**：编辑 **`config/capability_queue.json`**（编程 → 聊天 → 工具 → 检索 → 安全…），用 **`python scripts/lifers_capability_queue.py show|env|advance`**；`env` 子命令打印 **`LIFERS_TRAIN_SUITE_DIR`**，供下一轮 escalate 读取（各 `suite_dir` 下放你的 **jsonl** 语料）。
 
-**配置**：工作区已写入 **`lifers.*`**（**`config/integrated_layout.json`** → `workspace_settings`，物化 **`lifers.code-workspace`**，并写 **`rs.code-workspace`** 兼容副本）。对照：**`config/lifers_agents_ui.defaults.json`**。
+**配置**：便携根 **`config/integrated_layout.json`** → `workspace_settings`，物化 **`lifers.code-workspace`**（单文件）。对照：**`config/lifers_agents_ui.defaults.json`**（与 `lifers.*` 键对齐）。
 
 **会话持久化（v0.3.2+）**：历史会话保存在编辑器 **全局存储**（按 Lifers 根目录绝对路径哈希），并**镜像**到 **`.lifers/agents_history.json`**。切换「只打开 brain」与「打开 **`lifers.code-workspace`**」只要指向同一物理 **`lifers_brain`**，应加载同一会话。
 
@@ -73,10 +73,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ../tools/install_agents_exte
 
 ### Workspace / 工作区
 
-- **EN:** Deploy: **`bootstrap_lifers.bat`** or **`powershell -File tools/bootstrap_lifers.ps1`** (`bootstrap_rs.ps1` forwards) — materialize **`lifers.code-workspace`** + **`rs.code-workspace`**, **`run_integrated_bootstrap.py`**, **Lifers Agents UI**, **`sync_cursor_settings_to_vscodium.py`**, optional **`link_lifers_app.ps1`**, **`test_agents_ui_smoke.ps1`**. Tasks: **lifers: Bootstrap**, etc.
+- **EN:** Deploy: **`bootstrap_lifers.bat`** or **`powershell -File tools/bootstrap_lifers.ps1`** — materialize **`lifers.code-workspace`**, **`run_integrated_bootstrap.py`**, **Lifers Agents UI**, **`sync_cursor_settings_to_vscodium.py`**, optional **`link_lifers_app.ps1`**, **`test_agents_ui_smoke.ps1`**. Tasks: **lifers: Bootstrap**, etc.
 
 - **EN:** Open **`lifers.code-workspace`**. Defaults: **`config/integrated_layout.json`**. Override: **`config/workspace_custom.json`**, then **`python tools/materialize_integrated_workspace.py`**.
-- **中文：** 打开 **`lifers.code-workspace`**（或兼容 **`rs.code-workspace`**）。自定义同上。
+- **中文：** 打开 **`lifers.code-workspace`**。自定义同上。
 
 ### Spell check / 拼写检查
 

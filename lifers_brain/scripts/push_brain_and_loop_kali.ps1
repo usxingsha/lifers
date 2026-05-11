@@ -1,13 +1,13 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  从仓库根目录打包（见 package_rs_for_kali.ps1）、scp 到 Kali、解压合并到 ~/lifers；默认先 SSH pause；可选启动长期训练循环（tmux lifers-stack）。
+  从仓库根目录打包（见 package_rs_for_kali.ps1）、scp 到 Kali、解压合并到 ~/lifers；默认先 remote_pause_lifers_train.sh 暂停训练；可选启动长期训练循环（tmux lifers-stack）。
 
 .EXAMPLE
   cd C:\...\rs\lifers_brain\scripts
   .\push_brain_and_loop_kali.ps1
   .\push_brain_and_loop_kali.ps1 -KaliHost "kali@192.168.234.152" -SkipBootstrap
-  .\push_brain_and_loop_kali.ps1 -SkipBootstrap   # 默认先 SSH pause；只解压合并，不自动起 tmux
+  .\push_brain_and_loop_kali.ps1 -SkipBootstrap   # 默认先 pause 训练再传包；只解压合并，不自动起 tmux
   .\push_brain_and_loop_kali.ps1 -SkipPauseTrainFirst -SkipBootstrap  # 不 pause（极少用）
 #>
 param(
@@ -35,20 +35,16 @@ if (!$SkipPackage) {
 if (!(Test-Path -LiteralPath $Tar)) { throw "missing tarball: $Tar" }
 
 if (-not $SkipPauseTrainFirst) {
-  Write-Host "=== SSH: pause remote train (best-effort, bash) ===" -ForegroundColor Cyan
-  # Must run via bash - zsh treats "[pause]" as a glob when passed as default login shell argv.
-  $pauseUnix = @'
-set -euo pipefail
-if [[ -f "$HOME/lifers/lifers_brain/scripts/lifers_train_ctl.sh" ]]; then
-  bash "$HOME/lifers/lifers_brain/scripts/lifers_train_ctl.sh" pause
-  echo "pause-ok"
-else
-  echo "pause-skipped-no-ctl-yet"
-fi
-'@
-  $pauseUnix = ($pauseUnix -replace "`r`n", "`n").TrimEnd() + "`n"
-  $b64p = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($pauseUnix))
-  & $ssh @sshOpts $KaliHost "echo $b64p | base64 -d | bash -s --" 2>&1 | Write-Host
+  Write-Host "=== SSH: pause remote training (remote_pause_lifers_train.sh) ===" -ForegroundColor Cyan
+  $pauseSrc = Join-Path $PSScriptRoot "remote_pause_lifers_train.sh"
+  if (-not (Test-Path -LiteralPath $pauseSrc)) { throw "missing $pauseSrc" }
+  $tmpPause = Join-Path $env:TEMP "lifers_remote_pause_push_kali.sh"
+  Copy-Item $pauseSrc $tmpPause -Force
+  $enc = New-Object System.Text.UTF8Encoding $false
+  $txt = ([IO.File]::ReadAllText($tmpPause) -replace "`r`n", "`n")
+  [IO.File]::WriteAllText($tmpPause, $txt, $enc)
+  & $scp @sshOpts $tmpPause "${KaliHost}:/tmp/lifers_remote_pause_push_kali.sh"
+  & $ssh @sshOpts $KaliHost "bash /tmp/lifers_remote_pause_push_kali.sh" 2>&1 | Write-Host
   if ($LASTEXITCODE -ne 0) {
     Write-Warning "pause SSH exited $LASTEXITCODE (continuing with scp)"
   }

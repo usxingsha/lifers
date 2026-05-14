@@ -261,6 +261,27 @@ def _attention_causal_np(
     return out @ Wo
 
 
+def _topk_sample_token_id(last_logits: Any, rng: random.Random, temperature: float, top_k: int) -> int:
+    """温度 + top-k 采样一步；``last_logits`` 可为 ``list[float]`` 或一维 ``ndarray``。"""
+    if hasattr(last_logits, "tolist"):
+        last = last_logits.tolist()
+    else:
+        last = list(last_logits)
+    scaled = [x / max(1e-6, temperature) for x in last]
+    idxs = sorted(range(len(scaled)), key=lambda i: scaled[i], reverse=True)[: max(1, min(top_k, len(scaled)))]
+    vals = [scaled[i] for i in idxs]
+    probs = _softmax(vals)
+    r = rng.random()
+    acc = 0.0
+    pick = idxs[-1]
+    for i, p in zip(idxs, probs):
+        acc += p
+        if acc >= r:
+            pick = i
+            break
+    return pick
+
+
 def forward_np(
     w: TinyTransformerWeights,
     tok_emb: Any,
@@ -344,30 +365,33 @@ def generate_text(
     temperature: float = 1.0,
     top_k: int = 50,
 ) -> str:
+    from lifers_brain.fix_inference_prompt import clip_prompt_for_transformer
+
+    prompt = clip_prompt_for_transformer(prompt, w.max_seq)
     rng = random.Random(seed)
     stoi = {ch: i for i, ch in enumerate(w.vocab)}
     itos = w.vocab
     ids = encode(prompt, stoi)
+    prompt_token_count = len(ids)
+
+    np_mod = _try_numpy()
+    use_np = use_numpy_training(np_mod is not None)
+
+    if use_np and np_mod is not None:
+        tok_emb, pos_emb, Wq, Wk, Wv, Wo, W1, W2, Wlm = _np_tensors_from_weights(w, np_mod)
+        for _ in range(max_chars):
+            chunk = ids[-w.max_seq :]
+            logits_arr = forward_np(w, tok_emb, pos_emb, Wq, Wk, Wv, Wo, W1, W2, Wlm, chunk, np_mod)
+            last = logits_arr[-1]
+            ids.append(_topk_sample_token_id(last, rng, temperature, top_k))
+        return decode(ids[prompt_token_count:], itos)
 
     for _ in range(max_chars):
         logits = forward(w, ids[-w.max_seq :])
         last = logits[-1]
-        # temperature + top-k sampling
-        scaled = [x / max(1e-6, temperature) for x in last]
-        idxs = sorted(range(len(scaled)), key=lambda i: scaled[i], reverse=True)[: max(1, min(top_k, len(scaled)))]
-        vals = [scaled[i] for i in idxs]
-        probs = _softmax(vals)
-        r = rng.random()
-        acc = 0.0
-        pick = idxs[-1]
-        for i, p in zip(idxs, probs):
-            acc += p
-            if acc >= r:
-                pick = i
-                break
-        ids.append(pick)
+        ids.append(_topk_sample_token_id(last, rng, temperature, top_k))
 
-    return decode(ids[len(encode(prompt, stoi)) :], itos)
+    return decode(ids[prompt_token_count:], itos)
 
 
 def train_sgd_minimal(

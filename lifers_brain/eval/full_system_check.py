@@ -148,6 +148,7 @@ def check_tools_dry_run() -> None:
         "manipulate": {"action": "pick", "target": {"id": "noop"}},
         "safety_stop": {},
         "real_world": {"action": "clock"},
+        "vision_digest": {"rel_path": "config/stack.json"},
     }
     for spec in reg.list_specs():
         name = spec.name

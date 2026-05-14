@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
+import sys
 import time
 import hashlib
 from dataclasses import dataclass
@@ -51,12 +53,15 @@ class Scratchpad:
 class SessionMemory:
     """Short-term: rolling window + summary."""
 
-    def __init__(self, max_turns: int = 8) -> None:
+    def __init__(self, max_turns: int = 8, max_turn_chars: int = 6000) -> None:
         self.max_turns = max_turns
+        self.max_turn_chars = max_turn_chars
         self.turns: List[Tuple[str, str]] = []  # (role, text)
         self.summary: str = ""
 
     def add_turn(self, role: str, text: str) -> None:
+        if len(text) > self.max_turn_chars:
+            text = text[: self.max_turn_chars].rstrip() + "…"
         self.turns.append((role, text))
         if len(self.turns) > self.max_turns:
             # Move older turns into summary (very simple).
@@ -68,11 +73,16 @@ class SessionMemory:
             else:
                 self.summary = snippet[-2000:]
 
-    def context_text(self) -> str:
+    def context_text(self, max_chars: int = 0) -> str:
         turns = "\n".join([f"{r}: {t}" for r, t in self.turns])
+        prefix = ""
         if self.summary:
-            return f"SESSION_SUMMARY:\n{self.summary}\n\nRECENT_TURNS:\n{turns}"
-        return f"RECENT_TURNS:\n{turns}"
+            prefix = f"SESSION_SUMMARY:\n{self.summary}\n\nRECENT_TURNS:\n{turns}"
+        else:
+            prefix = f"RECENT_TURNS:\n{turns}"
+        if max_chars > 0 and len(prefix) > max_chars:
+            prefix = "…" + prefix[-max_chars + 1 :]
+        return prefix
 
     def sleep_compact(self) -> str:
         """
@@ -90,21 +100,198 @@ class SessionMemory:
         return blob
 
 
+# ── FTS5 shared infrastructure ──────────────────────────────────────────────
+
+_CJK_RE = re.compile(r"[一-鿿㐀-䶿豈-﫿]")
+_FTS_INIT_CACHE: set[tuple[str, int]] = set()
+_FTS_INIT_VER = 4  # bump when FTS triggers / schema must be reapplied in-process
+
+
+def _ensure_fts(db_path: str) -> None:
+    """Idempotent FTS5 virtual table + trigger creation (safe to call from multiple sites)."""
+    cache_key = (db_path, _FTS_INIT_VER)
+    if cache_key in _FTS_INIT_CACHE:
+        return
+    try:
+        with sqlite3.connect(db_path) as con:
+            con.execute("PRAGMA journal_mode=WAL;")
+            con.execute(
+                """
+                CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+                    content_text,
+                    tokenize='unicode61'
+                );
+            """
+            )
+            count = con.execute("SELECT count(*) FROM memories_fts").fetchone()[0]
+            if count == 0:
+                con.execute(
+                    """
+                    INSERT INTO memories_fts(rowid, content_text)
+                    SELECT id, content_text FROM memories
+                    WHERE content_text IS NOT NULL AND content_text != ''
+                """
+                )
+            gap = con.execute(
+                """
+                SELECT COUNT(*) FROM memories m
+                WHERE m.content_text IS NOT NULL AND m.content_text != ''
+                  AND NOT EXISTS (SELECT 1 FROM memories_fts f WHERE f.rowid = m.id)
+                """
+            ).fetchone()[0]
+            if int(gap or 0) > 0:
+                con.execute("DELETE FROM memories_fts")
+                con.execute(
+                    """
+                    INSERT INTO memories_fts(rowid, content_text)
+                    SELECT id, content_text FROM memories
+                    WHERE content_text IS NOT NULL AND content_text != ''
+                """
+                )
+            con.execute(
+                """
+                CREATE TRIGGER IF NOT EXISTS memories_fts_ai AFTER INSERT ON memories BEGIN
+                    INSERT INTO memories_fts(rowid, content_text) VALUES (new.id, new.content_text);
+                END;
+            """
+            )
+            con.execute("DROP TRIGGER IF EXISTS memories_fts_ad")
+            con.execute(
+                """
+                CREATE TRIGGER memories_fts_ad AFTER DELETE ON memories BEGIN
+                    DELETE FROM memories_fts WHERE rowid = old.id;
+                END;
+            """
+            )
+            con.execute("DROP TRIGGER IF EXISTS memories_fts_au")
+            con.execute(
+                """
+                CREATE TRIGGER memories_fts_au AFTER UPDATE ON memories BEGIN
+                    DELETE FROM memories_fts WHERE rowid = old.id;
+                    INSERT INTO memories_fts(rowid, content_text) VALUES (new.id, new.content_text);
+                END;
+            """
+            )
+    except sqlite3.OperationalError:
+        pass  # FTS5 not available or table locked — fallback will still work
+    _FTS_INIT_CACHE.add(cache_key)
+
+
+def _fts_query(query: str) -> str:
+    """Convert user query to FTS5-safe string with CJK character separation."""
+    cleaned = re.sub(r'["*^()ORNOT+\-]', " ", query)
+    # Insert space after each CJK character so unicode61 indexes them individually
+    spaced = _CJK_RE.sub(lambda m: m.group(0) + " ", cleaned)
+    return spaced.strip()
+
+
+def fts5_search(
+    db_path: str,
+    query: str,
+    k: int = 6,
+    types: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    """FTS5 search shared by LongTermMemory and tools (e.g. KbSearchTool).
+
+    Falls back to ``LIKE %q%`` when FTS returns nothing or the syntax fails.
+    """
+    q = query.strip()
+    if not q:
+        return []
+    _ensure_fts(db_path)
+
+    fts_q = _fts_query(q)
+    out: List[Dict[str, Any]] = []
+
+    try:
+        with sqlite3.connect(db_path) as con:
+            sql = """
+                SELECT m.id, m.type, m.content_json, m.importance, m.source, m.ts_ms
+                FROM memories m
+                INNER JOIN memories_fts fts ON m.id = fts.rowid
+                WHERE memories_fts MATCH ?
+            """
+            params: List[Any] = [fts_q]
+            if types:
+                sql += " AND m.type IN (" + ",".join(["?"] * len(types)) + ")"
+                params.extend(types)
+            sql += " ORDER BY m.importance DESC, m.ts_ms DESC LIMIT ?"
+            params.append(int(k))
+            rows = con.execute(sql, tuple(params)).fetchall()
+    except sqlite3.OperationalError:
+        rows = []
+
+    if not rows:
+        # Fallback to LIKE
+        try:
+            with sqlite3.connect(db_path) as con:
+                where = "content_text LIKE ?"
+                like_params: List[Any] = [f"%{q}%"]
+                if types:
+                    where += " AND type IN (" + ",".join(["?"] * len(types)) + ")"
+                    like_params.extend(types)
+                rows = con.execute(
+                    f"SELECT id,type,content_json,importance,source,ts_ms FROM memories WHERE {where} ORDER BY importance DESC, ts_ms DESC LIMIT ?",
+                    (*like_params, int(k)),
+                ).fetchall()
+        except sqlite3.OperationalError:
+            rows = []
+
+    for rid, t, cj, imp, src, ts in rows:
+        out.append(
+            {
+                "id": rid,
+                "type": t,
+                "content": json.loads(cj),
+                "importance": imp,
+                "source": src,
+                "ts_ms": ts,
+            }
+        )
+    return out
+
+
+def _check_disk_space(db_path: Path, min_mb: int = 50) -> bool:
+    """Return True if there is enough disk space for DB operations.
+    Falls back to True when the check is not supported (platform limitation)."""
+    try:
+        import shutil
+        _, _, free = shutil.disk_usage(str(db_path.parent))
+        return (free // (1024 * 1024)) >= min_mb
+    except (OSError, AttributeError):
+        return True  # can't check, assume ok
+
+
+def _wal_pragmas(con: "sqlite3.Connection") -> None:
+    """Apply WAL size limits to prevent unbounded journal growth on edge devices."""
+    con.execute("PRAGMA journal_size_limit=16777216;")       # 16 MB max WAL
+    con.execute("PRAGMA wal_autocheckpoint=500;")             # checkpoint every 500 pages (~4 MB)
+
+
 class LongTermMemory:
     """
     Minimal dependency long-term memory:
-    - SQLite full-text-ish via LIKE + type filters
+    - SQLite with FTS5 full-text search (fallback to LIKE for short/weird queries)
     - stores JSON content
+    - WAL size limited to 16 MB for edge deployment
     """
 
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init()
+        _ensure_fts(str(self.db_path))
+        # Periodic WAL checkpoint on init to keep journal small
+        try:
+            with sqlite3.connect(str(self.db_path)) as con:
+                con.execute("PRAGMA wal_checkpoint(PASSIVE);")
+        except sqlite3.OperationalError:
+            pass
 
     def _connect(self) -> sqlite3.Connection:
         con = sqlite3.connect(str(self.db_path))
         con.execute("PRAGMA journal_mode=WAL;")
+        _wal_pragmas(con)
         return con
 
     def _init(self) -> None:
@@ -129,13 +316,23 @@ class LongTermMemory:
                 con.execute("ALTER TABLE memories ADD COLUMN content_hash TEXT;")
             con.execute("CREATE INDEX IF NOT EXISTS idx_mem_type ON memories(type);")
             con.execute("CREATE INDEX IF NOT EXISTS idx_mem_ts ON memories(ts_ms);")
-            con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_mem_hash ON memories(content_hash);")
+            row = con.execute(
+                "SELECT sql FROM sqlite_master WHERE type='index' AND name=?",
+                ("idx_mem_hash",),
+            ).fetchone()
+            if row and row[0] and "UNIQUE" in row[0].upper():
+                con.execute("DROP INDEX IF EXISTS idx_mem_hash")
+            con.execute("CREATE INDEX IF NOT EXISTS idx_mem_hash ON memories(content_hash);")
 
     def _hash(self, t: str, content_json: str) -> str:
         h = hashlib.sha256((t + "\n" + content_json).encode("utf-8")).hexdigest()
         return h
 
     def add(self, item: MemoryItem) -> int:
+        if not _check_disk_space(self.db_path):
+            sys.stderr.write(f"LIFERS_PROGRESS memory disk_space_low db_path={self.db_path}\n")
+            sys.stderr.flush()
+            return -1
         ts = item.ts_ms or int(time.time() * 1000)
         content_json = json.dumps(item.content, ensure_ascii=False)
         content_text = content_json if isinstance(item.content, (dict, list)) else str(item.content)
@@ -155,34 +352,36 @@ class LongTermMemory:
         q = query.strip()
         if not q:
             return []
-        with self._connect() as con:
-            where = "content_text LIKE ?"
-            params: List[Any] = [f"%{q}%"]
-            if types:
-                where += " AND type IN (" + ",".join(["?"] * len(types)) + ")"
-                params.extend(types)
-            rows = con.execute(
-                f"SELECT id,type,content_json,importance,source,ts_ms FROM memories WHERE {where} ORDER BY importance DESC, ts_ms DESC LIMIT ?",
-                (*params, int(k)),
-            ).fetchall()
-        out = []
-        for rid, t, cj, imp, src, ts in rows:
-            out.append(
-                {
-                    "id": rid,
-                    "type": t,
-                    "content": json.loads(cj),
-                    "importance": imp,
-                    "source": src,
-                    "ts_ms": ts,
-                }
-            )
-        return out
+        return fts5_search(
+            str(self.db_path),
+            q,
+            k=k,
+            types=list(types) if types else None,
+        )
 
     def count_all(self) -> int:
         with self._connect() as con:
             row = con.execute("SELECT COUNT(*) FROM memories").fetchone()
             return int(row[0]) if row else 0
+
+    def checkpoint(self) -> None:
+        """Manually trigger WAL checkpoint to shrink journal (best-effort)."""
+        try:
+            with self._connect() as con:
+                con.execute("PRAGMA wal_checkpoint(PASSIVE);")
+        except sqlite3.OperationalError:
+            pass
+
+    def vacuum(self) -> Dict[str, Any]:
+        """Recover disk space from deleted rows.  Returns page stats."""
+        try:
+            before = (self.db_path.stat().st_size) if self.db_path.is_file() else 0
+            with self._connect() as con:
+                con.execute("VACUUM;")
+            after = (self.db_path.stat().st_size) if self.db_path.is_file() else 0
+            return {"recovered_bytes": max(0, before - after), "before_bytes": before, "after_bytes": after}
+        except (OSError, sqlite3.OperationalError) as e:
+            return {"error": str(e)}
 
     def prune(self, min_importance: float = 0.15, older_than_days: int = 30, limit: int = 500) -> Dict[str, Any]:
         """
@@ -201,6 +400,13 @@ class LongTermMemory:
                     f"DELETE FROM memories WHERE id IN ({','.join(['?']*len(ids))})",
                     tuple(ids),
                 )
+        if ids:
+            # Checkpoint outside the delete transaction to avoid locked-table errors
+            try:
+                with self._connect() as c:
+                    c.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            except sqlite3.OperationalError:
+                pass
         return {"deleted": len(ids), "ids": ids, "cutoff_ts_ms": cutoff}
 
     def prune_type_older_than(self, mem_type: str, older_than_days: int = 14, limit: int = 500) -> Dict[str, Any]:
@@ -217,5 +423,11 @@ class LongTermMemory:
                     f"DELETE FROM memories WHERE id IN ({','.join(['?'] * len(ids))})",
                     tuple(ids),
                 )
+        if ids:
+            try:
+                with self._connect() as c:
+                    c.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            except sqlite3.OperationalError:
+                pass
         return {"deleted": len(ids), "type": mem_type, "cutoff_ts_ms": cutoff}
 

@@ -7,12 +7,12 @@ Lifers 可执行工具（`ToolRegistry`）。
 `agent.Planner` / `agent.LifersAgent._step_core` 只产出已注册 **name** 的 `ToolCall`；`config/domains.json` 与
 `config/organ_capabilities.json` 的 `tools` 数组为**文档映射**，不得再实现一套执行逻辑。
 
-默认注册名（与 `build_default_registry` 一致，共 18 项）::
+默认注册名（与 `build_default_registry` 一致，共 19 项）::
 
     web_search, web_fetch, extract_evidence, fs_read, fs_write_patch,
     lifers_workspace_write, cmd_run, kb_upsert, kb_search, kb_prune, kb_compact,
     sim_run, sense_snapshot, motion_plan, motion_execute, manipulate,
-    safety_stop, real_world
+    safety_stop, real_world, vision_digest
 
 编排入口（非新工具名）：`smart`/`智搜`、`流程`/`workflow`、`方案`/`plan`、`cmd`、`sim_run`、`kb_*`、含 URL/路径
 的自然语言等 — 见 `agent.py` 中 `Planner` 与 `_step_core`。
@@ -22,12 +22,14 @@ import json
 import os
 import re
 import subprocess
+import sys
 import time
 import hashlib
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Iterable, List, Literal, Optional, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 Mode = Literal["dry_run", "execute", "verify", "rollback"]
 
@@ -458,14 +460,14 @@ class FsReadTool(Tool):
             for child in p.iterdir():
                 items.append({"name": child.name, "is_dir": child.is_dir()})
             return ToolResult(ok=True, data={"path": path, "type": "dir", "items": items})
-        raw = p.read_bytes()
+        try:
+            raw = p.read_bytes()
+        except OSError as e:
+            return ToolResult(ok=False, error=f"fs_read: {e}")
         truncated = len(raw) > max_bytes
         if truncated:
             raw = raw[:max_bytes]
-        try:
-            text = raw.decode("utf-8", errors="ignore")
-        except Exception:
-            text = str(raw)
+        text = raw.decode("utf-8", errors="ignore")
         return ToolResult(ok=True, data={"path": path, "type": "file", "text": text, "truncated": truncated})
 
     def verify(self, call: ToolCall, prior: Optional[ToolResult] = None) -> ToolResult:
@@ -476,6 +478,47 @@ class FsReadTool(Tool):
 
     def rollback(self, call: ToolCall, prior: Optional[ToolResult] = None) -> ToolResult:
         return ToolResult(ok=True, data={"note": "No rollback for read-only."})
+
+
+class VisionDigestTool(Tool):
+    """图像路径（LIFERS_ROOT 下）→ 轻量元数据摘要，供 prompt 注入。"""
+
+    spec = ToolSpec(
+        name="vision_digest",
+        args_schema={"rel_path": "string under LIFERS_ROOT (.png/.jpg/.webp/…)"},
+        permissions=["fs:read"],
+        supports_modes=("dry_run", "execute", "verify", "rollback"),
+        risk_level="low",
+    )
+
+    def dry_run(self, call: ToolCall) -> ToolResult:
+        rel = str(call.args.get("rel_path", "")).strip()
+        return ToolResult(ok=True, data={"rel_path": rel, "note": "Would summarize image metadata under LIFERS_ROOT."})
+
+    def execute(self, call: ToolCall) -> ToolResult:
+        from lifers_brain.vision_support import summarize_image_under_root
+
+        rel = str(call.args.get("rel_path", "")).strip()
+        if not rel:
+            return ToolResult(ok=False, error="Missing args.rel_path")
+        root = Path(_lifers_root()).resolve()
+        info = summarize_image_under_root(root, rel)
+        if not info.get("ok"):
+            return ToolResult(ok=False, error=str(info.get("error") or "vision_digest failed"))
+        return ToolResult(
+            ok=True,
+            data=info,
+            evidence_snippets=[_snippet("vision_digest", str(info.get("caption_zh") or ""))],
+        )
+
+    def verify(self, call: ToolCall, prior: Optional[ToolResult] = None) -> ToolResult:
+        if prior is None:
+            return ToolResult(ok=False, error="verify requires prior ToolResult")
+        ok = prior.ok and bool(prior.data.get("caption_zh"))
+        return ToolResult(ok=ok, data={"has_caption": ok})
+
+    def rollback(self, call: ToolCall, prior: Optional[ToolResult] = None) -> ToolResult:
+        return ToolResult(ok=True, data={"note": "No rollback for read-only vision_digest."})
 
 
 class FsWritePatchTool(Tool):
@@ -934,16 +977,29 @@ class KbUpsertTool(Tool):
                 con.execute("ALTER TABLE memories ADD COLUMN content_hash TEXT;")
             if "mem_key" not in cols:
                 con.execute("ALTER TABLE memories ADD COLUMN mem_key TEXT;")
-            con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_mem_hash ON memories(content_hash);")
-            con.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_mem_key ON memories(mem_key);")
+            # Legacy UNIQUE(content_hash) breaks keyed UPDATEs when another row already has the new hash.
+            row = con.execute(
+                "SELECT sql FROM sqlite_master WHERE type='index' AND name=?",
+                ("idx_mem_hash",),
+            ).fetchone()
+            if row and row[0] and "UNIQUE" in row[0].upper():
+                con.execute("DROP INDEX IF EXISTS idx_mem_hash")
+            con.execute("CREATE INDEX IF NOT EXISTS idx_mem_hash ON memories(content_hash);")
+            rowk = con.execute(
+                "SELECT sql FROM sqlite_master WHERE type='index' AND name=?",
+                ("idx_mem_key",),
+            ).fetchone()
+            if rowk and rowk[0] and "UNIQUE" in rowk[0].upper():
+                con.execute("DROP INDEX IF EXISTS idx_mem_key")
+            con.execute("CREATE INDEX IF NOT EXISTS idx_mem_key ON memories(mem_key);")
             for it in items:
                 t = str(it.get("type", "fact"))
                 content = it.get("content", "")
                 imp = float(it.get("importance", 0.5))
                 src = str(it.get("source", "tool"))
                 key = it.get("key")
-                cj = json.dumps(content, ensure_ascii=False)
-                ct = cj if isinstance(content, (dict, list)) else str(content)
+                cj = json.dumps(content, ensure_ascii=False).replace("\x00", "")
+                ct = cj if isinstance(content, (dict, list)) else str(content).replace("\x00", "")
                 ch = hashlib.sha256((t + "\n" + cj).encode("utf-8")).hexdigest()
 
                 # Upsert by key (e.g. URL) to support "update" semantics.
@@ -951,6 +1007,14 @@ class KbUpsertTool(Tool):
                     key = key.strip()
                     exists_k = con.execute("SELECT id FROM memories WHERE mem_key = ?", (key,)).fetchone()
                     if exists_k:
+                        row_id = int(exists_k[0])
+                        dup_h = con.execute(
+                            "SELECT id FROM memories WHERE content_hash = ? AND id <> ?",
+                            (ch, row_id),
+                        ).fetchone()
+                        if dup_h:
+                            skipped_hashes.append(ch)
+                            continue
                         con.execute(
                             "UPDATE memories SET type=?, content_hash=?, content_json=?, content_text=?, importance=?, source=?, ts_ms=? WHERE mem_key=?",
                             (t, ch, cj, ct, imp, src, ts, key),
@@ -1017,7 +1081,7 @@ class KbSearchTool(Tool):
         return ToolResult(ok=True, data={"query": call.args.get("query", ""), "note": "Would search long-term memory."})
 
     def execute(self, call: ToolCall) -> ToolResult:
-        import sqlite3
+        from lifers_brain.memory import fts5_search
 
         q = str(call.args.get("query", "")).strip()
         k = int(call.args.get("k", 6))
@@ -1027,14 +1091,7 @@ class KbSearchTool(Tool):
         if not os.path.exists(db_path):
             return ToolResult(ok=True, data={"items": [], "db_path": db_path})
 
-        with sqlite3.connect(db_path) as con:
-            rows = con.execute(
-                "SELECT id,type,content_json,importance,source,ts_ms FROM memories WHERE content_text LIKE ? ORDER BY importance DESC, ts_ms DESC LIMIT ?",
-                (f"%{q}%", k),
-            ).fetchall()
-        items = []
-        for rid, t, cj, imp, src, ts in rows:
-            items.append({"id": rid, "type": t, "content": json.loads(cj), "importance": imp, "source": src, "ts_ms": ts})
+        items = fts5_search(db_path, q, k=k)
         return ToolResult(ok=True, data={"items": items, "db_path": db_path}, evidence_snippets=[_snippet("kb_search", f"query={q}")])
 
     def verify(self, call: ToolCall, prior: Optional[ToolResult] = None) -> ToolResult:
@@ -1171,7 +1228,7 @@ class KbCompactTool(Tool):
         for (cj,) in rows:
             try:
                 obj = json.loads(cj)
-            except Exception:
+            except json.JSONDecodeError:
                 continue
             if isinstance(obj, dict) and obj.get("event") == "evidence":
                 for s in obj.get("snippets", [])[:5]:
@@ -1378,6 +1435,14 @@ def build_default_registry() -> ToolRegistry:
     reg.register(ManipulateTool())
     reg.register(SafetyStopTool())
     reg.register(RealWorldTool())
+    reg.register(VisionDigestTool())
+    try:
+        from lifers_brain.plugin_loader import register_plugins
+
+        register_plugins(reg, Path(_lifers_root()).resolve())
+    except Exception as exc:
+        sys.stderr.write(f"LIFERS_PROGRESS plugin_loader error: {exc}\n")
+        sys.stderr.flush()
     return reg
 
 

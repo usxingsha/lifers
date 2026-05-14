@@ -11,10 +11,11 @@ def max_speed_enabled() -> bool:
 
 def use_numpy_training(numpy_import_ok: bool) -> bool:
     """
-    NumPy/BLAS forward path for train_sgd (releases GIL in matmul; set OMP_NUM_THREADS / OPENBLAS_NUM_THREADS).
+    NumPy/BLAS forward path for ``train_sgd_minimal`` / ``generate_text`` / 流式 transformer
+    （matmul 走 BLAS；建议设置 ``OMP_NUM_THREADS`` / ``OPENBLAS_NUM_THREADS``）。
 
-    - Unset or LIFERS_USE_NUMPY=1|auto: use NumPy when import succeeds (default on capable installs).
-    - LIFERS_USE_NUMPY=0: force pure-Python lists (single-threaded; low CPU % on large matrices).
+    - 未设置或 ``LIFERS_USE_NUMPY=1|auto``：在 numpy 可用时启用（默认可用则开）。
+    - ``LIFERS_USE_NUMPY=0``：强制纯 Python 列表路径（训练与推理一致关闭）。
     """
     raw = os.environ.get("LIFERS_USE_NUMPY", "").strip().lower()
     if raw in ("0", "false", "no", "off"):

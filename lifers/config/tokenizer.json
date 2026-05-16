@@ -1,0 +1,22 @@
+{
+  "_comment": "Tokenizer config for lifers_transformer. Set vocab_path to your actual vocabulary file.",
+  "type": "bpe",
+  "vocab_path": "config/vocab.json",
+  "merges_path": "config/merges.txt",
+  "vocab_size": 32000,
+  "unk_token": "<unk>",
+  "bos_token": "<s>",
+  "eos_token": "</s>",
+  "pad_token": "<pad>",
+  "special_tokens": {
+    "user":      "<|user|>",
+    "assistant": "<|assistant|>",
+    "system":    "<|system|>",
+    "npc":       "<|npc|>",
+    "end_turn":  "<|endofturn|>"
+  },
+  "max_length": 4096,
+  "truncation_side": "left",
+  "add_bos_token": true,
+  "add_eos_token": true
+}

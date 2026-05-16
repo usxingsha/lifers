@@ -1,7 +1,19 @@
 # 联运布局（须跟踪）：config/integrated_layout.json — 勿添加误伤整条 config/ 的忽略规则
 
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Weights and training checkpoints (large binary, fetched separately)
+*.npz
+
 # Optional NTFS junction to sibling ../lifers — created by tools/link_lifers_app.ps1
+# Git sees this as a file (not directory), pattern /lifers matches both.
+# Use ! prefix to un-ignore the directory.
 /lifers
+!/lifers/
 
 # 便携壳/内嵌 VS Code 体积巨大，不进入 Git（本地可选解压）
 /shell/

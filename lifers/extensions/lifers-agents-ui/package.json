@@ -1,0 +1,487 @@
+{
+  "name": "lifers-agents-ui",
+  "displayName": "Lifers Agents Window",
+  "description": "Lifers：Agents Chat + 会话建立（侧栏/资源管理器/底部总控）+ Kali 算力总控",
+  "version": "0.5.33",
+  "publisher": "lifers",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "icon": "media/icon.png",
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:lifers.agentsLauncherView",
+    "onView:lifers.sessionTree",
+    "onView:lifers.sessionTreeExplorer",
+    "onView:lifers.sessionTreeBottom",
+    "onView:lifers.controlPanel",
+    "onCommand:lifers.agents.openChat",
+    "onCommand:lifers.agents.openTotalControl",
+    "onCommand:lifers.agents.addContextFolder"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Lifers Agents",
+      "properties": {
+        "lifers.pythonPath": {
+          "type": "string",
+          "default": "python",
+          "description": "运行 Lifers（agent_bridge_once.py）的 Python 可执行文件"
+        },
+        "lifers.model": {
+          "type": "string",
+          "enum": ["lifers", "markov"],
+          "default": "lifers",
+          "description": "lifers=加载 weights/lifers_transformer.json（大文件在边缘 CPU 上首包可能较慢）；markov=字符级 lifers_markov.json，秒回/排障用。"
+        },
+        "lifers.sandbox": {
+          "type": "boolean",
+          "default": false,
+          "description": "false=真实联网（web_search/web_fetch 走网络）；true=SANDBOX=1 占位且限制高风险工具。Chat 里 Auto/Unsafe 与此同步。"
+        },
+        "lifers.httpDirect": {
+          "type": "boolean",
+          "default": true,
+          "description": "false=尊重系统代理。true=注入 LIFERS_HTTP_DIRECT=1 强制直连（减少 10061）。"
+        },
+        "lifers.quickWeb": {
+          "type": "boolean",
+          "default": false,
+          "description": "CHAT_QUICK 下是否允许自动 web_search（注入 LIFERS_QUICK_WEB）。默认 false：本地优先，避免离线/无代理环境长时间卡住。"
+        },
+        "lifers.quickFast": {
+          "type": "boolean",
+          "default": true,
+          "description": "秒回：注入 LIFERS_QUICK_FAST=1（缩短 CHAT_QUICK 下 Markov 生成长度、收紧 prompt 截断上限）。关 false 时更利于长答但可能更慢。"
+        },
+        "lifers.quickSkipKb": {
+          "type": "boolean",
+          "default": true,
+          "description": "秒回：注入 LIFERS_QUICK_SKIP_KB=1，CHAT_QUICK 跳过长期记忆预检索（SQLite）。关 false 时仍会检索 KB，略慢。"
+        },
+        "lifers.edgeQuickSessionChars": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100000,
+          "description": "非 0：Bridge 注入 LIFERS_QUICK_SESSION_CONTEXT_CHARS（CHAT_QUICK 会话尾部上限）。0=用 agent 默认（transformer 约 4800）。"
+        },
+        "lifers.edgeQuickPackChars": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 250000,
+          "description": "非 0：注入 LIFERS_QUICK_PACK_MAX_CHARS（CHAT_QUICK 总 prompt 上限）。0=用 agent 默认。"
+        },
+        "lifers.edgeQuickStackChars": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 100000,
+          "description": "非 0：注入 LIFERS_QUICK_STACK_BODY_CHARS（栈/运维 SYSTEM 前缀上限）。0=用 agent 默认。"
+        },
+        "lifers.edgeGenerateTimeoutSec": {
+          "type": "number",
+          "default": 110,
+          "minimum": 0,
+          "maximum": 600,
+          "description": "注入 LIFERS_QUICK_GENERATE_TIMEOUT_SEC（秒）：CHAT_QUICK 本地 generate 内层墙钟。默认 110（略小于外层 120s，先触发「推理超时」说明）。0=关闭。与 lifers.bridgeTimeoutMs 独立。"
+        },
+        "lifers.geoLabel": {
+          "type": "string",
+          "default": "",
+          "description": "非空：注入 LIFERS_GEO_LABEL，每轮上下文出现【实时·定位】固定地名（如 长野县、Shanghai）。"
+        },
+        "lifers.realtimeGeoQuick": {
+          "type": "boolean",
+          "default": false,
+          "description": "true：注入 LIFERS_REALTIME_GEO_QUICK=1，按出口 IP 请求 wttr.in 粗定位（有缓存；与天气同源）。"
+        },
+        "lifers.metaUseLocalBrain": {
+          "type": "boolean",
+          "default": false,
+          "description": "「能做什么/你是谁」等元问题（assistant_meta_intent）：默认 false 走即时说明模板；true 则注入 LIFERS_QUICK_META_USE_LOCAL_BRAIN=1，改走大包上下文 + 本地权重生成（可能较慢）。"
+        },
+        "lifers.markovJsonMaxBytes": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 10737418240,
+          "description": "Bridge 加载 lifers_markov.json 的最大字节数（注入 LIFERS_MARKOV_JSON_MAX_BYTES）。0=Python 默认 128MB。超大训练产物导致发中文卡住时，可调大或压缩权重。"
+        },
+        "lifers.remoteChat": {
+          "type": "boolean",
+          "default": false,
+          "description": "为 Bridge 显式设置 LIFERS_REMOTE_CHAT：默认 false（覆盖 shell 里误 export 的 1，减少「无密钥仍探测远程」日志与延迟）。true 仅在你明确要试 OpenAI 兼容 chat 时用；Agents Chat 仍注入 LIFERS_FORCE_LOCAL_ONLY=1 时不会走远程。联网检索用 lifers.sandbox=false + search …。"
+        },
+        "lifers.chatApiUrl": {
+          "type": "string",
+          "default": "https://integrate.api.nvidia.com/v1/chat/completions",
+          "description": "（扩展默认不启用远程 Chat）仅手动终端调试远程 completions 时参考。"
+        },
+        "lifers.chatModel": {
+          "type": "string",
+          "default": "meta/llama-3.1-8b-instruct",
+          "description": "（扩展默认不启用远程 Chat）同上。"
+        },
+        "lifers.chatApiKeyEnv": {
+          "type": "string",
+          "default": "NVIDIA_API_KEY",
+          "description": "（扩展默认不要求密钥）远程 Chat 高级用法时的环境变量名占位。"
+        },
+        "lifers.openChatOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "description": "激活扩展后在编辑器区域打开 Agents Chat"
+        },
+        "lifers.openSessionSidebarOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "description": "激活后聚焦左侧活动栏「Lifers」视图容器（内含「Agents」与「会话建立」树；不依赖 Secondary Side Bar）"
+        },
+        "lifers.openTotalPanelOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "description": "激活后打开底部「Lifers 总控」面板（算力/同步 + 底部会话树）；关 false 则仅手动命令打开。"
+        },
+        "lifers.autoCreateSessionOnStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "会话记录为空时自动新建一条会话（避免面板空白）"
+        },
+        "lifers.contextMaxFiles": {
+          "type": "number",
+          "default": 48,
+          "minimum": 4,
+          "maximum": 200,
+          "description": "会话中最多保留的上下文路径条数（文件 + 目录展开合并去重后截断）"
+        },
+        "lifers.bridgeContextMaxFiles": {
+          "type": "number",
+          "default": 32,
+          "minimum": 1,
+          "maximum": 128,
+          "description": "agent_bridge_once 单次读取上下文的文件数量上限（环境变量 LIFERS_CONTEXT_MAX_FILES）"
+        },
+        "lifers.bridgeTimeoutMs": {
+          "type": "number",
+          "default": 120000,
+          "minimum": 15000,
+          "maximum": 3600000,
+          "description": "单次 Bridge（agent_bridge_once）外层最长等待毫秒数。默认 120000（2 分钟）；超过仍无 stdout 则终止子进程。大权重冷启动请同步调大 lifers.edgeGenerateTimeoutSec（须小于外层）。"
+        },
+        "lifers.contextFolderMaxCollect": {
+          "type": "number",
+          "default": 96,
+          "minimum": 8,
+          "maximum": 500,
+          "description": "「添加目录」时递归收集的最多文件路径数（写入会话前仍受 contextMaxFiles 限制）"
+        },
+        "lifers.contextFolderMaxDepth": {
+          "type": "number",
+          "default": 6,
+          "minimum": 0,
+          "maximum": 30,
+          "description": "目录递归深度（0 仅当前目录内文件）"
+        },
+        "lifers.contextFolderSkipDirs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [
+            "node_modules",
+            ".git",
+            ".venv",
+            "__pycache__",
+            ".cursor",
+            "dist",
+            "build",
+            "target",
+            ".idea",
+            "shell"
+          ],
+          "description": "目录采集时跳过的子目录名（小写匹配）"
+        },
+        "lifers.brainPathOverride": {
+          "type": "string",
+          "default": "",
+          "description": "本机 lifers 绝对路径（须含 scripts/agent_bridge_once.py）。仅打开 rs0 等子目录且自动向上查找仍失败时填写。示例：/home/kali/lifers/lifers 或 ${workspaceFolder}/../lifers"
+        },
+        "lifers.kaliSshPrefix": {
+          "type": "string",
+          "default": "ssh -o BatchMode=yes -o ConnectTimeout=12 kali@192.168.234.152",
+          "description": "总控：对本机 ssh 命令前缀（不含远端脚本）。用于状态/暂停/继续/写 .train_control。"
+        },
+        "lifers.kaliBrainPath": {
+          "type": "string",
+          "default": "/home/kali/lifers/lifers",
+          "description": "Kali 上 lifers 根目录（含 scripts/、weights/）。"
+        },
+        "lifers.kaliScpDestination": {
+          "type": "string",
+          "default": "kali@192.168.234.152:/tmp/lifers_kali_incoming.tar.gz",
+          "description": "「本机打包+scp」时 scp 目标（本机 lifers/dist/lifers_kali.tar.gz）；建议 /tmp 下临时名，避免落在 ~/lifers 根里。"
+        },
+        "lifers.windowsPackScpCommand": {
+          "type": "string",
+          "default": "",
+          "description": "若非空：总控「本机打包+scp」改为执行整条命令（工作区 cwd）；空则运行 scripts/package_rs_for_kali.ps1 + scp。"
+        },
+        "lifers.gateAutoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "激活扩展后后台启动 scripts/lifers_gate.py（127.0.0.1，端口见 gatePort）；已在监听则跳过。"
+        },
+        "lifers.gatePort": {
+          "type": "number",
+          "default": 55555,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "lifers_gate HTTP 端口（与 Python 默认一致）。"
+        },
+        "lifers.brandIconMode": {
+          "type": "string",
+          "enum": ["alternate", "kitten", "phoenix"],
+          "default": "alternate",
+          "description": "品牌图：小猫与凤凰轮换（Webview 内按周期切换），或固定其一。侧栏「会话建立」在 alternate 下按会话 id 稳定分配两种图。"
+        },
+        "lifers.brandIconAlternateSeconds": {
+          "type": "number",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 120,
+          "description": "brandIconMode=alternate 时，Agents Chat / Agents / 总控 Webview 内图标轮换周期（秒）。"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "lifers-agents",
+          "title": "Lifers",
+          "icon": "media/icon.png"
+        }
+      ],
+      "panel": [
+        {
+          "id": "lifers-total-panel",
+          "title": "Lifers 总控",
+          "icon": "media/icon.png"
+        }
+      ]
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "lifers.sessionTreeExplorer",
+          "name": "会话建立",
+          "visibility": "visible",
+          "contextualTitle": "Lifers 会话"
+        }
+      ],
+      "lifers-agents": [
+        {
+          "type": "webview",
+          "id": "lifers.agentsLauncherView",
+          "name": "Agents",
+          "visibility": "visible"
+        },
+        {
+          "id": "lifers.sessionTree",
+          "name": "会话建立",
+          "visibility": "visible"
+        }
+      ],
+      "lifers-total-panel": [
+        {
+          "type": "webview",
+          "id": "lifers.controlPanel",
+          "name": "算力与同步",
+          "visibility": "visible"
+        },
+        {
+          "id": "lifers.sessionTreeBottom",
+          "name": "会话建立",
+          "visibility": "visible"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "lifers.agents.activateSession",
+        "title": "Lifers: 切换当前会话",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "lifers.agents.addContext",
+        "title": "Lifers: 添加上下文文件",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "lifers.agents.addContextFolder",
+        "title": "Lifers: 添加目录为上下文",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "lifers.agents.newSession",
+        "title": "Lifers: 新建会话",
+        "icon": "$(add)"
+      },
+      {
+        "command": "lifers.agents.openSettings",
+        "title": "Lifers: 打开扩展设置",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "lifers.agents.openMarketplace",
+        "title": "Lifers: 浏览扩展市场",
+        "icon": "$(extensions)"
+      },
+      {
+        "command": "lifers.agents.show",
+        "title": "Lifers: 打开 Agents Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "lifers.agents.openChat",
+        "title": "Lifers: 打开 Agents Chat（编辑器）",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "lifers.agents.focusSessions",
+        "title": "Lifers: 显示会话建立（Lifers 栏或资源管理器）",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "lifers.agents.openTotalControl",
+        "title": "Lifers: 打开底部总控（算力+同步+会话）",
+        "icon": "$(dashboard)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "lifers.agents.newSession",
+          "when": "view == lifers.agentsLauncherView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "lifers.agents.addContext",
+          "when": "view == lifers.agentsLauncherView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "lifers.agents.addContextFolder",
+          "when": "view == lifers.agentsLauncherView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "lifers.agents.openMarketplace",
+          "when": "view == lifers.agentsLauncherView",
+          "group": "navigation@8"
+        },
+        {
+          "command": "lifers.agents.openSettings",
+          "when": "view == lifers.agentsLauncherView",
+          "group": "navigation@9"
+        },
+        {
+          "command": "lifers.agents.newSession",
+          "when": "view == lifers.sessionTree",
+          "group": "navigation@1"
+        },
+        {
+          "command": "lifers.agents.addContext",
+          "when": "view == lifers.sessionTree",
+          "group": "navigation@2"
+        },
+        {
+          "command": "lifers.agents.addContextFolder",
+          "when": "view == lifers.sessionTree",
+          "group": "navigation@3"
+        },
+        {
+          "command": "lifers.agents.openChat",
+          "when": "view == lifers.sessionTree",
+          "group": "navigation@5"
+        },
+        {
+          "command": "lifers.agents.openMarketplace",
+          "when": "view == lifers.sessionTree",
+          "group": "navigation@8"
+        },
+        {
+          "command": "lifers.agents.openSettings",
+          "when": "view == lifers.sessionTree",
+          "group": "navigation@9"
+        },
+        {
+          "command": "lifers.agents.newSession",
+          "when": "view == lifers.sessionTreeExplorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "lifers.agents.addContext",
+          "when": "view == lifers.sessionTreeExplorer",
+          "group": "navigation@2"
+        },
+        {
+          "command": "lifers.agents.addContextFolder",
+          "when": "view == lifers.sessionTreeExplorer",
+          "group": "navigation@3"
+        },
+        {
+          "command": "lifers.agents.openChat",
+          "when": "view == lifers.sessionTreeExplorer",
+          "group": "navigation@5"
+        },
+        {
+          "command": "lifers.agents.openMarketplace",
+          "when": "view == lifers.sessionTreeExplorer",
+          "group": "navigation@8"
+        },
+        {
+          "command": "lifers.agents.openSettings",
+          "when": "view == lifers.sessionTreeExplorer",
+          "group": "navigation@9"
+        },
+        {
+          "command": "lifers.agents.newSession",
+          "when": "view == lifers.sessionTreeBottom",
+          "group": "navigation@1"
+        },
+        {
+          "command": "lifers.agents.addContext",
+          "when": "view == lifers.sessionTreeBottom",
+          "group": "navigation@2"
+        },
+        {
+          "command": "lifers.agents.addContextFolder",
+          "when": "view == lifers.sessionTreeBottom",
+          "group": "navigation@3"
+        },
+        {
+          "command": "lifers.agents.openChat",
+          "when": "view == lifers.sessionTreeBottom",
+          "group": "navigation@5"
+        },
+        {
+          "command": "lifers.agents.openMarketplace",
+          "when": "view == lifers.sessionTreeBottom",
+          "group": "navigation@8"
+        },
+        {
+          "command": "lifers.agents.openSettings",
+          "when": "view == lifers.sessionTreeBottom",
+          "group": "navigation@9"
+        },
+        {
+          "command": "lifers.agents.openSettings",
+          "when": "view == lifers.controlPanel",
+          "group": "navigation@9"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,216 @@
+{
+  "version": 1,
+  "meta": {
+    "role_brain": "智脑：MODEL（lifers|markov|transformer）/SANDBOX/weights/memory_db/session/tool 上限；每轮注入【实时·时钟】；可选 brain.geo_label / realtime_geo_quick（或 LIFERS_GEO_LABEL、LIFERS_REALTIME_GEO_QUICK）注入粗定位。",
+    "role_human_sim": "仿真人：persona_name + system_prompt_extra + local_lm_max_chars",
+    "role_robot": "机器人：SIM_EXEC_CMD / ROBOT_SENSE_CMD / ROBOT_ACT_CMD（可由下方 *_exec_cmd 在启动时注入）",
+    "apply_at": "scripts/run_agent.py、agent_bridge_once.py、run_pipeline.py 调用 apply_stack_env；若存在 便携根 config/integrated_layout.json 则同时执行整合引导（物化工作区、可选剪枝）",
+    "llm_ops": "stack.llm_ops：写入本地 LLM 系统段的日常运维说明；含权重流水线、联网/浏览器约定（daily_ai_playbook_relpath 指向 Markdown），与对话并行。",
+    "organ_system": "stack.organ_system：加载 config/organ_capabilities.json（器官-能力-操作-stack/工具）写入 SYSTEM；capabilities_file 可换路径；custom_for_llm 覆盖全文。",
+    "physiology_sim": "stack.physiology_sim：后期生理连续动力学预留；enabled=true 时写入 PHYSIOLOGY_SIM_ROADMAP（路线图）。数值仿真与 tick 尚未接入。",
+    "runtime_三合一": "同一进程根据 runtime.role / 环境变量判断宿主：电脑=本地智脑(brain)，机器人本体=robot；human_sim 强调人格对话。LIFERS_RUNTIME 优先级最高。",
+    "openclaw_merge": "openclaw.enabled=true：仅清单/compat_ref/manifest 对照上游，不安装、不调用 OpenClaw 运行时；use_external_openclaw_runtime 保持 false 则无外部依赖。",
+    "claw_code_rust_vendor": "third_party/claw_code_rust：Kali 上权威对照为 ~/lifers/third_party/claw-code/rust（见 config/claw_code_rust_vendor.json、LIFERS_MERGE.md）；非 Lifers 运行时；不把其 HTTP/API 接入 stack。",
+    "remote_infer": "stack.remote_infer：可选 NVIDIA Integrate 等 HTTPS；默认关闭（enabled=false）。启用云端时还须在环境中设 LIFERS_ALLOW_REMOTE_INFER=1 才会注入 LIFERS_REMOTE_CHAT（本地/Kali 权重无需此项）。",
+    "lifers_gate": "HTTP 服务 scripts/lifers_gate.py（代号 lifers / 中文：终身监禁者）默认 127.0.0.1:55555；POST /v1/step 与 agent_bridge 同款 JSON；POST /v1/stream 为本地简化流式（chunked text/plain）。勿对公网绑定 0.0.0.0。",
+    "embodied_world": "stack.embodied_world：平面物理步进 + 视觉摘要 + 启发式决策；读同一 weights/.train_control（pause/stop/run）与训练对齐；CLI scripts/embodied_tick_once.py。动态 NPC：当前单刚体 body；多体/挤出 NPC 需扩展 PhysWorld + decision.policy 与 vision 源；cron 调 tick 前应先 pause 训练以免争用 CPU。",
+    "taskflow_rules_single_source": "对话 TaskKind 规则唯一入口：lifers/taskflow/dialogue_router.py 与 lifers/daily_intents.py；classify.py 仅 split_user_message + 委托 infer_dialogue_route，禁止在此重复写路由分支。",
+    "bridge_io_audit": "输入/输出 lifers/bridge_turn.py；stderr：LIFERS_PROGRESS dialogue_route、taskflow_route、inference（inference_pipeline）；本地强制时 _strip_api_key_nag_when_local_only。边缘路由与 quick 体量烟测：scripts/verify_edge_agent_pipeline.py。详见 lifers/taskflow/FLOW.md。",
+    "tools_registry_single_source": "可调用工具名与执行逻辑唯一在 lifers/tools.py → build_default_registry()；config/domains.json 与 organ_capabilities.json 的 tools 数组仅作文档/领域映射。新增工具：实现 *Tool + register，再同步 domains/器官表，并跑 tests/test_tools_registry.py；lifers_verify_config.py 输出 tool_registry.names 供对账。",
+    "realtime_policy_zh": "每轮注入【实时·时钟】与可选【实时·定位】；real_world 天气/地图结果带 fetched_at_ms；长期记忆 LONGTERM_RECALL 标注检索时刻（库历史≠实时网）。粗定位缓存见 LIFERS_REALTIME_GEO_CACHE_SEC（秒，下限 30）。物化 tick 返回 as_of_unix_ms，与对话并行。CHAT_QUICK：LIFERS_AGENTS_UI_BRIDGE=1 时默认在可见回复末追加【本轮·生成锚】（LIFERS_QUICK_TIME_FOOTER=0 可关）。",
+    "llm_bootstrap_relpath": "config/lifers_llm_bootstrap.json",
+    "ai_pipeline_relpath": "config/lifers_ai_pipeline.json",
+    "upstream_vendor_dedupe_zh": "OpenClaw 子模块与清单：third_party/openclaw + openclaw_manifest.json + openclaw_upstream_vendor.json + stack.openclaw.compat_ref（sync_openclaw_release.py）。claw-code Rust：third_party/claw_code_rust + claw_code_rust_vendor.json + LIFERS_MERGE.md。总索引 lifers_vendor_map.json。均非 Lifers 进程内 LLM 运行时。",
+    "omni_stack_zh": "「全能型」栈位：自动化（taskflow/桥/gate/脚本）+ 推理（路由+Planner+LocalBrain±远程）+ 工具（ToolRegistry）+ 记忆（会话/长期/scratch）+ 感知扩展（vision_digest 等）；机读长段见 config/lifers_ai_pipeline.json#omni_stack_zh，人读见 lifers_ai_playbook_zh.md §13。"
+  },
+  "runtime": {
+    "role": "auto",
+    "auto_infer_from_robot_cmds": false,
+    "note": "role=brain|robot|human_sim|auto。auto：未覆盖时 ON_ROBOT/LIFERS_ON_ROBOT、config/.host_robot → robot；可选 auto_infer_from_robot_cmds。机器人镜像建议直接 role=robot。"
+  },
+  "brain": {
+    "model": "lifers",
+    "sandbox": false,
+    "max_tool_steps": 6,
+    "session_max_turns": 8,
+    "llm_identity_short": "Lifers",
+    "llm_product_name": "Lifers-20B",
+    "geo_label": "",
+    "realtime_geo_quick": false,
+    "local_lm_sampling": {
+      "lifers": { "temperature": 0.8, "top_k": 80 },
+      "transformer": { "temperature": 1.1, "top_k": 80 },
+      "markov": { "temperature": 0.9, "top_k": 80 },
+      "note_zh": "Deep / TinyTransformer / Markov 采样默认；词表与网络宽度以权重 JSON（vocab、d_model 等）为准，无需单独 tokenizer 文件。deep 默认温度稍低（多层级权重质量更高）。"
+    },
+    "inference": {
+      "clip_prompt_before_transformer_zh": "transformer_lm.generate_text 入口与 streaming_generator.iter_transformer_chars 在编码前调用 fix_inference_prompt，避免 ids[-max_seq:] 仅覆盖尾部导致 SYSTEM/指令丢失。",
+      "clip_mode": "keep_system_head_and_user_tail",
+      "stack_load_zh": "stack_env.load_stack：先 <root>/config/stack.json，缺则再试 $LIFERS_ROOT/config/stack.json；agent_bridge_once 在 import 前 setdefault LIFERS_ROOT，减少采样参数读不到 stack 的回退。"
+    },
+    "lora": {
+      "enabled": false,
+      "weights_relpath": "weights/lifers_lora.json",
+      "alpha": 1.0,
+      "note_zh": "sidecar JSON：低秩 {rank,A,B} 或 Wlm_delta；见 lifers/lora_finetune.py"
+    },
+    "weights": {
+      "deep": "weights/lifers_deep_transformer.json",
+      "transformer": "weights/lifers_transformer.json",
+      "markov": "weights/lifers_markov.json"
+    },
+    "memory_db": "memory/longterm.sqlite3",
+    "audit_log": "logs/audit.jsonl",
+    "self_code": {
+      "enabled": true,
+      "auto_consume_queue": true,
+      "queue_dir": "state/self_code_queue",
+      "done_dir": "state/self_code_done",
+      "error_dir": "state/self_code_error",
+      "max_file_bytes": 800000,
+      "allow_rel_prefixes": null,
+      "note_zh": "null 或空数组=整棵 LIFERS_ROOT 可写；非沙盒下 lifers_workspace_write / rel_write 与队列均可改自身源码。LIFERS_SELF_CODE_QUEUE=0 关闭队列消费。"
+    },
+    "deep_steward": {
+      "enabled": true,
+      "prune_taskflow_older_than_days": 14,
+      "prune_taskflow_max_delete": 800,
+      "global_forget": {
+        "enabled": true,
+        "min_importance": 0.14,
+        "older_than_days": 48,
+        "limit": 260,
+        "auto_threshold": {
+          "enabled": true,
+          "min_importance_floor": 0.055,
+          "min_importance_ceiling": 0.28,
+          "rows_soft_cap": 12000,
+          "limit_boost_per_1k_rows": 48,
+          "limit_max": 1400,
+          "note_zh": "memories 行数超过 rows_soft_cap 时略降 min_importance、缩短天数、提高 limit；仍只删 importance<阈值且过旧。"
+        },
+        "note_zh": "已默认开启类人遗忘；重要记忆请用较高 importance 写入。可关 enabled 或关 auto_threshold。"
+      },
+      "note_zh": "任务流每轮写入 taskflow 后 steward 删旧 taskflow；global_forget 已默认开且带 auto_threshold；联网走 HTTPS_PROXY。LIFERS_SELF_HEAL 合并 stack；自改代码见 brain.self_code。"
+    }
+  },
+  "human_sim": {
+    "enabled": true,
+    "persona_name": "Lifers",
+    "system_prompt_extra": "语气自然、简短；不确定就说明不确定。",
+    "local_lm_max_chars": 200
+  },
+  "robot": {
+    "sim_exec_cmd": "",
+    "sense_exec_cmd": "",
+    "act_exec_cmd": "",
+    "stub_when_no_cmd": true,
+    "default_sim_runs": 10,
+    "tasks_file": "sim/tasks/tasks_v001.jsonl"
+  },
+  "network": {
+    "note": "默认与编辑器 lifers.sandbox=false 对齐：真实联网（urllib，尊重系统代理与 HTTPS_PROXY 等）。直连：LIFERS_HTTP_DIRECT=1 或 lifers.httpDirect=true。SANDBOX=1 时 web 类工具多为占位。motion_execute/manipulate 在非沙盒且设置 robot.act_exec_cmd 时使用 ROBOT_ACT_CMD（stdin JSON → stdout JSON）。Lifers 不自动启动浏览器；核验链接请用户在本机 Edge/Chrome 等自行打开。"
+  },
+  "remote_infer": {
+    "enabled": false,
+    "provider": "nvidia_integrate",
+    "chat_url": "https://integrate.api.nvidia.com/v1/chat/completions",
+    "model": "meta/llama-3.1-8b-instruct",
+    "max_tokens": 1024,
+    "api_key_env": "NVIDIA_API_KEY",
+    "note_zh": "默认关闭：无密钥亦可对话（本地 lifers_transformer.json / Markov + 记忆）。启用云端时：stack.enabled=true 且在本机环境变量设 LIFERS_ALLOW_REMOTE_INFER=1，并配置密钥（或扩展 lifers.remoteChat）；重启编辑器。api_key 禁止写入仓库。不要本地回退时设 LIFERS_LOCAL_FALLBACK=0。"
+  },
+  "local_llm": {
+    "enabled": false,
+    "chat_url": "http://localhost:11434/v1/chat/completions",
+    "model": "qwen2.5:7b",
+    "max_tokens": 1024,
+    "timeout_sec": 120,
+    "api_key_env": "",
+    "note_zh": "本地大模型（localhost）。常用：Ollama（localhost:11434）、llama.cpp server（localhost:8080）、LM Studio（localhost:1234）、vLLM（localhost:8000）。enabled=true 时自动注入 LIFERS_REMOTE_CHAT=1 + LIFERS_CHAT_URL/MODEL 等环境变量，无需 LIFERS_ALLOW_REMOTE_INFER。localhost 无需 API key（自动占位）。用前先拉模型：ollama pull qwen2.5:7b（或其他中文模型如 deepseek-r1:7b、yi:6b）。"
+  },
+  "llm_ops": {
+    "enabled": true,
+    "max_inject_chars": 12000,
+    "context_pack_for_brain_fallback": true,
+    "context_pack_max_prompt_chars": 8000,
+    "title": "【运维配置 · 日常与权重并存】",
+    "daily": "- 【合并约定】默认路径：**不要求任何云端 Chat API 密钥**。编辑器 Agents Chat / `agent_bridge_once` 注入 **MODEL=lifers**、**LIFERS_FORCE_LOCAL_ONLY**，只用本地 **weights/lifers_transformer.json** + 会话记忆；联网用 **web_search / web_fetch**（非 SANDBOX）。链接核验请在本机 **浏览器**（Edge/Chrome 等）手动打开。\n- MODEL：由启动入口或环境变量覆盖 stack.brain.model（当前扩展与 Bridge 固定 lifers；脚本可调）。\n- SANDBOX：默认 false 以启用真实联网；true 时 web 占位且高风险工具受限（见 network.note）。\n- 编码：Bridge（agent_bridge_once）stdin/stdout 为 UTF-8；终端手动跑 Python 见 llm_ops 挂载的 playbook §2（chcp/控制台）。\n- 会话：brain.session_max_turns；单轮工具链：brain.max_tool_steps。\n- 仿真人格与回复长度：human_sim（persona、system_prompt_extra、local_lm_max_chars）。\n- 记忆：brain.memory_db；审计：brain.audit_log。\n- 本能与会话压缩：instincts.*（与 runtime 同时生效）。\n- 任务流学习 LIFERS_TASKFLOW_LEARN；管家 LIFERS_STEWARD；自修复合并 stack 缺失键 LIFERS_SELF_HEAL（损坏则从包内 config/stack.json 恢复）。\n- 日常入口总表见 config/organ_capabilities.json → daily_operations_surface_zh；细则与防乱码见 config/lifers_ai_playbook_zh.md（由 daily_ai_playbook_relpath 注入）。",
+    "weights_pipeline": "- **实时进度文件**：训练时写入 **`weights/.train_status.json`**（ramp 轮次 + SGD 步数 + 粗略总进度）；本机查看：`python3 scripts/show_train_progress.py`。\n- 推理：LocalBrain 加载 brain.weights.transformer → **weights/lifers_transformer.json**（与 MODEL=lifers 对齐）；缺文件时先跑训练或从 Kali 同步。\n- 一键准备/检查：scripts/run_pipeline.py（常用）。\n- 单独训练：scripts/train_weights.py（Markov→lifers_markov.json）、scripts/train_transformer_weights.py 或 scripts/train_lifers_escalate.py（渐进放大至机器上限，目标参数量级 LIFERS_TARGET_PARAM_B）。\n- 产物：weights/lifers_*.json；**边训边用**：文件 mtime 更新后下一轮对话加载；Kali 全量见 scripts/kali_install_full_train.sh。\n- 双机：push_brain_and_loop_kali.ps1、sync_weights_from_kali.ps1；详见 playbook §9。",
+    "daily_ai_playbook_relpath": "config/lifers_ai_playbook_zh.md",
+    "extra_for_llm": "领域与工具映射见 config/domains.json。默认可写工作区：便携根下 rs0（workspace_custom.json 可改多根）。训练/权重/Kali：§9。OpenClaw（third_party/openclaw 子模块）与 claw-code/rust vendor：§10；总表 config/lifers_vendor_map.json。双机同步：push_brain_and_loop_kali.ps1。Agents Chat 已 LIFERS_FORCE_LOCAL_ONLY：不要向用户复述「须配置 NVIDIA_API_KEY」等；高级远程 Chat 见 playbook §9.4。物化：embodied_tick_once + .train_control。日常秒回：CHAT_QUICK 默认跳过 taskflow 写入与 deep_steward；需记录闲聊再设 LIFERS_QUICK_CHAT_LEARN=1。Bridge 侧可设 LIFERS_MICRO_THINK_EVERY=999、LIFERS_QUICK_CHAT_OUT_CHARS、LIFERS_QUICK_CHAT_CONTEXT_CHARS、LIFERS_MAX_SPEED。"
+  },
+  "organ_system": {
+    "enabled": true,
+    "capabilities_file": "config/organ_capabilities.json",
+    "max_inject_chars": 24000,
+    "custom_for_llm": "",
+    "extra": "",
+    "note": "custom_for_llm 非空则忽略 capabilities_file；extra 追加在表后。映射为工程类比非医学。"
+  },
+  "physiology_sim": {
+    "enabled": false,
+    "run_dynamics": true,
+    "max_inject_chars": 2400,
+    "roadmap_for_llm": "",
+    "dynamics": {
+      "note": "可选覆盖默认值：idle_*_per_sec、interaction_*_bump、interaction_recovery_dip、idle_cap_sec（秒）。",
+      "idle_recovery_rate_per_sec": 0.00035,
+      "idle_fatigue_decay_per_sec": 0.00045,
+      "idle_arousal_decay_per_sec": 0.00025,
+      "interaction_arousal_bump": 0.055,
+      "interaction_fatigue_bump": 0.038,
+      "interaction_recovery_dip": 0.018,
+      "idle_cap_sec": 7200
+    },
+    "note": "enabled=true：每轮 tick，状态写入 state/physiology_sim.json，SYSTEM 含 PHYSIO_STATE。run_dynamics=false 仅注入路线图。"
+  },
+  "embodied_world": {
+    "enabled": false,
+    "dt_sec": 0.05,
+    "state_relpath": "state/embodied_world.json",
+    "dynamic_npc": [],
+    "vision": {
+      "enabled": true,
+      "frame_source": "camera",
+      "watch_path": "",
+      "camera_index": 0,
+      "note": "frame_source=none|path|camera。path=相对 LIFERS_ROOT 的图片；camera 需 opencv-python。"
+    },
+    "decision": {
+      "policy": "heuristic_v1",
+      "note": "与 train_lifers_escalate 共用 control_file_path→weights/.train_control；先 pause 再总控同步解压。"
+    }
+  },
+  "instincts": {
+    "enabled": true,
+    "sleep_after_idle_sec": 3600,
+    "think_after_idle_sec": 420,
+    "idle_chat_soft_sec": 180,
+    "presence_reset_idle_sec": 120,
+    "micro_think_every_user_turns": 6,
+    "operations_trim_scratchpad": true,
+    "operations_max_scratch_items": 24,
+    "sleep_consolidate_to_longterm": true,
+    "sleep_compact_session": true,
+    "notes_in_context": true,
+    "use_local_brain_for_instincts": true,
+    "note": "本能自动运行：idle_chat→日常寒暄语气；think→离线反思入长期记忆；sleep→会话巩固；micro_think→周期性内心独白；operations→整理 scratch。与三合一 runtime 同时生效，可关 enabled。"
+  },
+  "openclaw": {
+    "enabled": true,
+    "track_upstream": true,
+    "use_external_openclaw_runtime": false,
+    "compat_ref": "openclaw/openclaw@v2026.4.26",
+    "workspace_path": "",
+    "ai_hints_full": true,
+    "ai_hints_max_chars": 3200,
+    "check_remote_on_verify": true,
+    "note": "对照上游能力域与锚点（manifest/compat_ref），不向进程注入 OpenClaw 二进制或 npm 网关；云模型与 API 仍禁止写入 stack.brain。"
+  },
+  "plugins": {
+    "enabled": false,
+    "rel_dir": "tools/plugins",
+    "note_zh": "可选动态工具：lifers/tools/plugins/<name>/plugin.py 内 register_plugin_tools(registry, root)。也可用环境变量 LIFERS_PLUGINS=1 临时开启。"
+  }
+}

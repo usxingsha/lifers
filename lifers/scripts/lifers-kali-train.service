@@ -1,0 +1,17 @@
+[Unit]
+Description=Lifers offline weight training (Kali / Linux)
+Documentation=file:scripts/KALI_WEIGHTS.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-%h/.config/lifers-kali.env
+# LIFERS_ROOT 与可选 LIFERS_KALI_TRAIN_MODE 由 kali_install_full_train.sh --enable-boot 写入 ~/.config/lifers-kali.env
+ExecStart=/bin/bash -lc 'set -euo pipefail; root="${LIFERS_ROOT:?missing LIFERS_ROOT in ~/.config/lifers-kali.env}"; cd "$root"; export PYTHONPATH="$root" SANDBOX="${SANDBOX:-1}"; export LIFERS_KALI_TRAIN_MODE="${LIFERS_KALI_TRAIN_MODE:-full}"; exec bash scripts/kali_train_weights.sh'
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

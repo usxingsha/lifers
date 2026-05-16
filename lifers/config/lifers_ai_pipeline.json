@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "title_zh": "Lifers AI 全链路索引（输入→语义→推理→输出），与 agent / 边缘 / 物化 NPC 并列自检",
+  "omni_stack_zh": "「全能型」指同一进程内可编排的完整工作面（工程目标，非超 AGI）：① 自动化——taskflow 编排、桥接/lifers_gate、可选自改队列与运维脚本；② 推理——dialogue_router + Planner + LocalBrain（及可选 remote_infer）；③ 全能工具——ToolRegistry（domains/器官映射）、SANDBOX 闸、max_tool_steps；④ 全能记忆——SessionMemory + LongTermMemory + scratch + learn/steward；⑤ 多感知占位与 vision_digest 元摘要、embodied tick、本能节律、可选插件与 LoRA sidecar、POST /v1/stream 流式。边界与运维见 lifers_ai_playbook_zh.md §13、organ_capabilities.goal_zh。",
+  "stages": [
+    {
+      "id": "input",
+      "title_zh": "输入处理",
+      "code": ["lifers/bridge_turn.py", "lifers/chat_messages.py"],
+      "config": ["config/stack.json#brain", "config/stack.json#llm_ops"],
+      "behaviors_zh": [
+        "context_files 安全读入、LIFERS_CONTEXT_MAX_FILES",
+        "JSON stdin → lifers_turn / lifers_turn_from_json_body",
+        "上下文前缀 --- user message --- → split_user_message 强制 FULL_PIPELINE",
+        "LIFERS_TASKFLOW / LIFERS_QUICK_WEB / LIFERS_FORCE_LOCAL_ONLY / LIFERS_AGENTS_UI_BRIDGE"
+      ]
+    },
+    {
+      "id": "semantic",
+      "title_zh": "语义理解 / 路由",
+      "code": [
+        "lifers/taskflow/orchestrator.py",
+        "lifers/taskflow/dialogue_router.py",
+        "lifers/taskflow/classify.py",
+        "lifers/daily_intents.py",
+        "lifers/agent.py#Planner"
+      ],
+      "config": ["config/organ_capabilities.json", "config/domains.json"],
+      "stderr_tags": ["LIFERS_PROGRESS dialogue_route", "LIFERS_PROGRESS inference taskflow_route"],
+      "single_source_note_zh": "路由规则仅 dialogue_router + daily_intents；classify 不重复写分支。"
+    },
+    {
+      "id": "inference",
+      "title_zh": "推理生成",
+      "code": [
+        "lifers/agent.py#LifersAgent",
+        "lifers/agent.py#_step_core",
+        "lifers/agent.py#_quick_chat_reply",
+        "lifers/inference_pipeline.py",
+        "lifers/transformer_lm.py",
+        "lifers/markov_lm.py",
+        "lifers/openai_compat_chat.py"
+      ],
+      "config": ["config/stack.json#brain.weights", "config/stack.json#remote_infer"],
+      "stderr_tags": [
+        "LIFERS_PROGRESS inference",
+        "transformer_generate_begin",
+        "transformer_generate_end",
+        "LIFERS_PROGRESS [本能·实时",
+        "LIFERS_PROGRESS [步骤"
+      ]
+    },
+    {
+      "id": "output",
+      "title_zh": "输出优化",
+      "code": ["lifers/bridge_turn.py#_strip_api_key_nag_when_local_only", "lifers/agent.py#_tool_first_answer", "lifers/agent.py#_append_quick_reply_time_footer"],
+      "behaviors_zh": [
+        "大脑方案头：【上下文时效】【记忆快照】",
+        "LONGTERM_RECALL 段首检索时刻说明",
+        "real_world / web_search 摘要附 fetched_at_ms",
+        "CHAT_QUICK 可选【本轮·生成锚】（LIFERS_QUICK_TIME_FOOTER / AGENTS_UI_BRIDGE）",
+        "LIFERS_QUICK_PACK_MAX_CHARS / LIFERS_QUICK_CHAT_OUT_CHARS 等体积控制"
+      ]
+    },
+    {
+      "id": "agent_runtime",
+      "title_zh": "AI Agent（智脑进程内）",
+      "code": [
+        "lifers/agent.py",
+        "lifers/tools.py",
+        "lifers/memory.py",
+        "lifers/instincts.py",
+        "lifers/stack_env.py"
+      ],
+      "config": ["config/stack.json#runtime", "config/stack.json#instincts", "config/stack.json#human_sim"],
+      "note_zh": "与 OpenClaw npm 网关无运行时耦合；vendor 见 lifers_llm_bootstrap.json。"
+    },
+    {
+      "id": "edge",
+      "title_zh": "边缘部署（Kali / SSH / 轻量快路径）",
+      "code": ["lifers/scripts/verify_edge_agent_pipeline.py", "extensions/lifers-agents-ui/extension.js"],
+      "config": ["config/stack.json#meta.bridge_io_audit", "config/stack.json#llm_ops"],
+      "behaviors_zh": [
+        "MODEL=markov 降低首包；LIFERS_QUICK_* 收紧 prompt",
+        "POSIX 上 CHAT_QUICK 本地 generate 墙钟：LIFERS_QUICK_GENERATE_TIMEOUT_SEC（扩展 lifers.edgeGenerateTimeoutSec 注入）；外层整次等待 lifers.bridgeTimeoutMs",
+        "权重与代码同步见 playbook §9 / push_brain_and_loop_kali.ps1"
+      ]
+    },
+    {
+      "id": "embodied_npc",
+      "title_zh": "物化世界与动态 NPC",
+      "code": [
+        "lifers/embodied/coordinator.py",
+        "lifers/embodied/physics.py",
+        "lifers/embodied/vision.py",
+        "lifers/scripts/embodied_tick_once.py"
+      ],
+      "config": ["config/stack.json#embodied_world", "config/stack.json#meta.embodied_world"],
+      "behaviors_zh": [
+        "与 LifersAgent 会话并行；读写 state/embodied_world.json",
+        "dynamic_npc.enabled 为占位；多体需扩展 PhysWorld + policy",
+        "tick 尊重 weights/.train_control pause/stop/run",
+        "run_embodied_tick 返回 as_of_unix_ms、realtime_note"
+      ]
+    }
+  ],
+  "aggregate_checks_zh": [
+    "python scripts/lifers_run_all_checks.py",
+    "python scripts/lifers_verify_config.py",
+    "python scripts/check_lifers_llm_ready.py",
+    "python scripts/verify_edge_agent_pipeline.py",
+    "python scripts/embodied_tick_once.py"
+  ],
+  "related_maps": [
+    "config/lifers_llm_bootstrap.json",
+    "lifers/taskflow/FLOW.md"
+  ]
+}

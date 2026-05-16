@@ -1,0 +1,71 @@
+{
+  "version": 2,
+  "description": "domain→tools mapping",
+  "domains": [
+    {
+      "id": "dialogue",
+      "label": "日常对话（文本生成）",
+      "tools_brain_side": ["底层 LocalBrain + Planner，权重文件驱动"],
+      "training_scripts": ["scripts/train_weights.py", "scripts/train_transformer_weights.py", "scripts/train_lifers_escalate.py"],
+      "pipeline": "scripts/run_pipeline.py",
+      "weights": ["weights/lifers_markov.json", "weights/lifers_transformer.json"],
+      "env_hint": { "MODEL": "lifers | markov | transformer（lifers 与 transformer 同权重文件）" },
+      "llm_ops": "config/stack.json#llm_ops：向本地模型注入的日常运维 + 权重流水线说明（与训练并行，不排除 run_pipeline）"
+    },
+    {
+      "id": "filesystem_ops",
+      "label": "本地文件读写与补丁",
+      "tools": ["fs_read", "fs_write_patch", "lifers_workspace_write", "vision_digest"],
+      "notes": "Planner 根据路径触发 fs_read；rel_write/workspace_write/self_write 首行口令 → lifers_workspace_write；写入受 SANDBOX 与 ToolSpec.risk_level 约束。"
+    },
+    {
+      "id": "shell_ops",
+      "label": "命令行/自动化入口",
+      "tools": ["cmd_run"],
+      "notes": "可用 cmd_run 调用外部脚本（含将来键盘鼠标驱动）；高风险执行受 SANDBOX 与 risk_level 约束。"
+    },
+    {
+      "id": "web",
+      "label": "上网检索与网页抓取",
+      "tools": ["web_search", "web_fetch", "extract_evidence"],
+      "notes": "SANDBOX=1 时 web_search 等为模拟；真实网络请 SANDBOX=0。"
+    },
+    {
+      "id": "realtime_environment",
+      "label": "时钟·天气·地图（本机或出站 HTTP）",
+      "tools": ["real_world"],
+      "notes": "Planner.plan_real_world_instinct 产出；与 CHAT_QUICK 内 `_inject_realtime_spacetime_context` 文本注入互补；数据源含本机时钟、wttr.in、Nominatim。"
+    },
+    {
+      "id": "hybrid_kb_web",
+      "label": "记忆优先再联网（智搜 / 双通道）",
+      "tools": ["kb_search", "web_search"],
+      "notes": "用户前缀 smart/智搜 由 agent._step_core 编排；流程…/workflow … 由 Planner.plan 固定两步。勿在配置中重复实现编排代码。"
+    },
+    {
+      "id": "memory_kb",
+      "label": "长期记忆 / 知识库",
+      "tools": ["kb_upsert", "kb_search", "kb_prune", "kb_compact"],
+      "storage": "memory/longterm.sqlite3"
+    },
+    {
+      "id": "vision_embodied_stub",
+      "label": "视觉与物理操作（当前为占位/仿真接口）",
+      "tools": ["sense_snapshot", "motion_plan", "motion_execute", "manipulate", "safety_stop", "sim_run"],
+      "notes": "与 lifers/tools.py 中对应 Tool 名一致；sense_snapshot 等为可替换桩：接摄像头/机械臂/桌面控制需另行实现或经 cmd_run 调用外部程序。"
+    },
+    {
+      "id": "openclaw_bridge",
+      "label": "上游 OpenClaw 对照（默认无运行时）",
+      "config_source": "stack.openclaw.track_upstream + openclaw_manifest；compat_ref 由 sync 脚本对齐 release",
+      "dedupe": "本仓库不实现上游网关/频道；仅清单对照。use_external_openclaw_runtime 才注入 OPENCLAW_WORKSPACE。",
+      "env_hint": {
+        "LIFERS_OPENCLAW_UPSTREAM": "已启用上游对照",
+        "LIFERS_OPENCLAW_BRIDGE": "可选，外部网关并存",
+        "OPENCLAW_WORKSPACE": "仅 bridge 模式"
+      },
+      "sync": "scripts/sync_openclaw_release.py（详见 lifers_ai_playbook_zh.md §10）",
+      "upstream": "https://github.com/openclaw/openclaw"
+    }
+  ]
+}

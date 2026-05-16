@@ -1,0 +1,19 @@
+# Lifers AI — runtime dependencies
+# Core (stdlib-based, no external deps for basic operation)
+# Install: pip install -r requirements.txt
+
+# Required
+numpy>=1.24.0
+
+# Optional — voice/TTS
+# pyttsx3>=2.90          # Windows SAPI / Linux espeak TTS
+# edge_tts>=6.1.0         # Edge TTS (async, cross-platform)
+
+# Optional — image/vision
+# Pillow>=10.0.0          # Image processing
+
+# Optional — cloud remote inference (most cloud deployments)
+# requests>=2.31.0        # HTTP via stdlib urllib if not installed
+
+# Optional — training
+# No extras needed; training uses numpy only

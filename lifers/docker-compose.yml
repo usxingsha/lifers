@@ -1,0 +1,48 @@
+version: "3.8"
+
+services:
+  lifers:
+    build: .
+    image: lifers:latest
+    container_name: lifers-brain
+    restart: unless-stopped
+    ports:
+      - "55555:55555"
+    volumes:
+      - ./weights:/app/weights:rw
+      - ./config:/app/config:ro
+      - ./memory:/app/memory:rw
+      - ./logs:/app/logs:rw
+      - ./state:/app/state:rw
+    environment:
+      - PYTHONPATH=/app
+      - LIFERS_ROOT=/app
+      - PYTHONUTF8=1
+      - SANDBOX=1
+      - LIFERS_FORCE_LOCAL_ONLY=1
+      - MODEL=lifers
+    # For remote inference, set:
+    #   LIFERS_ALLOW_REMOTE_INFER=1
+    #   LIFERS_CHAT_URL=https://your-api.com/v1/chat/completions
+    #   LIFERS_CHAT_API_KEY=sk-...
+    command: ["python3", "scripts/lifers_gate.py", "--host", "0.0.0.0", "--port", "55555"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:55555/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Optional: training worker (off by default — uncomment to enable)
+  # train:
+  #   image: lifers:latest
+  #   container_name: lifers-train
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./weights:/app/weights:rw
+  #     - ./config:/app/config:ro
+  #   environment:
+  #     - PYTHONPATH=/app
+  #     - LIFERS_ROOT=/app
+  #     - PYTHONUTF8=1
+  #   command: ["python3", "scripts/train_deep_escalate.py", "--ramp-max", "999999"]

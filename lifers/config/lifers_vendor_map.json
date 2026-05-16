@@ -1,0 +1,34 @@
+{
+  "version": 3,
+  "primary_product": "Lifers (lifers LocalBrain / stack.json / tools)",
+  "policy_zh": "便携根目录名 lifers（与 GitHub 仓 lifers 一致）。以 Lifers 配置与 Python 工具链为唯一运行时真相；vendor 树仅供对照、审计与迁移参考，不在此进程内启动 OpenClaw 或 claw-code 网关。云 API 不进 stack.brain。",
+  "policy_en": "Lifers stack is authoritative at runtime; vendor trees are reference-only; no OpenClaw or claw-code gateway in-process; no cloud API keys in stack.brain.",
+  "external_ai_frameworks_posture_zh": "通用深度学习与 LLM 工业栈（张量运行时、变换器库、分布式与混合精度封装、推理服务、分词器等）以本机与 Kali 上的系统包与 PyPI 安装为准，不在本仓复制整棵上游源码。Lifers 自有训练与推理以 lifers 内脚本与 weights 下 JSON 为主；大体积预训练权重不入 Git，仅在机器间 scp 或现有同步脚本传递。需要对照上游实现时，在独立工作区做只读检出，不并入本仓 third_party。",
+  "external_ai_frameworks_posture_en": "Use OS packages and PyPI for large upstream frameworks; do not vendor full framework trees here. Lifers training and inference stay in lifers; large pretrained blobs stay out of git and move via existing sync flows.",
+  "chat_api_shape_note_zh": "与 OpenAI 风格 messages 对齐的最小结构见 lifers/chat_messages.py（仅互操作类型，不含上游框架源码）。",
+  "vendors": [
+    {
+      "id": "openclaw_upstream",
+      "type": "git_submodule",
+      "path": "third_party/openclaw",
+      "url": "https://github.com/openclaw/openclaw.git",
+      "manifest": "lifers/config/openclaw_upstream_vendor.json",
+      "capabilities_manifest": "lifers/config/openclaw_manifest.json"
+    },
+    {
+      "id": "claw_code_rust",
+      "type": "vendored_workspace",
+      "path": "third_party/claw_code_rust",
+      "manifest": "lifers/config/claw_code_rust_vendor.json",
+      "merge_doc": "third_party/claw_code_rust/LIFERS_MERGE.md"
+    }
+  ],
+  "ai_context_order": [
+    "stack.json + organ_capabilities + lifers_ai_playbook_zh",
+    "lifers_llm_bootstrap.json (对话→回复闭环与 vendor 去重索引)",
+    "lifers_ai_pipeline.json (输入→语义→推理→输出 + agent/边缘/NPC 索引 + omni_stack_zh)",
+    "openclaw_manifest.json (capability boundaries vs upstream)",
+    "lifers_vendor_map.json (this file) + two vendor manifests + external_ai_frameworks_posture_*",
+    "optional: third_party source trees (read/audit only)"
+  ]
+}

@@ -242,6 +242,8 @@ def _generate(model: dict, prompt: str, max_tokens: int = 50,
     stoi = {ch: i for i, ch in enumerate(vocab)}
     itos = {i: ch for i, ch in enumerate(vocab)}
     ids = [stoi.get(c, 0) for c in prompt]
+    if not ids:
+        ids = [0]
     max_seq = model["max_seq"]
 
     for _ in range(max_tokens):

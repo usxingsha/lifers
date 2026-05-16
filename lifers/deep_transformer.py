@@ -377,6 +377,8 @@ def generate_text(
     stoi = {ch: i for i, ch in enumerate(w.vocab)}
     itos = {i: ch for i, ch in enumerate(w.vocab)}
     ids = encode(prompt, stoi)
+    if not ids:
+        ids = [0]  # bootstrap with first vocab token on empty prompt
 
     te = _np.asarray(w.tok_emb, dtype=_np.float64)
     pe = _np.asarray(w.pos_emb, dtype=_np.float64)

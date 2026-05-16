@@ -13,12 +13,17 @@ SYNC_INTERVAL="${SYNC_INTERVAL:-60}"
 # 注意：绝不包含 logs/ weights/*.npz weights/*.json weights/.train_*
 # 日志和训练权重 Kali 独立维护，同步覆盖会导致进程写入幽灵文件
 SYNC_FILES=(
+    "scripts/cli.py"
     "scripts/lifers_chat.py"
     "scripts/auto_expand_corpus.py"
     "scripts/train_watchdog.py"
     "scripts/edge_inference.py"
     "scripts/train_deep_escalate.py"
     "scripts/lifers"
+    "deep_transformer.py"
+    "deep_transformer_train.py"
+    "__main__.py"
+    ".gitignore"
     "Dockerfile"
     "docker-compose.yml"
     "requirements.txt"

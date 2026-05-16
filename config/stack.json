@@ -198,8 +198,8 @@
     "note": "对照上游能力域与锚点（manifest/compat_ref），不向进程注入 OpenClaw 二进制或 npm 网关；云模型与 API 仍禁止写入 stack.brain。"
   },
   "plugins": {
-    "enabled": false,
+    "enabled": true,
     "rel_dir": "tools/plugins",
-    "note_zh": "可选动态工具：lifers/tools/plugins/<name>/plugin.py 内 register_plugin_tools(registry, root)。也可用环境变量 LIFERS_PLUGINS=1 临时开启。"
+    "note_zh": "默认启用全能AI技能插件 (lifers_omni_skills: calculator/grep_search/sys_monitor/csv_process/json_query/file_download/git_helper)"
   }
 }

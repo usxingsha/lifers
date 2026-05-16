@@ -408,7 +408,10 @@ class LifersAgent:
         npc_hint = self._npc_dialogue_hint(user_line)
         tail_identity = (
             f"You are {self._llm_identity}. "
-            "Reply in natural Chinese when the user writes Chinese; be concise and safe. "
+            "You are an all-capable local AI assistant: reasoning, coding, knowledge retrieval, "
+            "content creation, tool use, and multi-turn conversation. "
+            "Reply in natural Chinese when the user writes Chinese; be concise, accurate, and safe. "
+            "If unsure, say so honestly rather than fabricating. "
             "This turn is CHAT_QUICK (route → local brain): no tools ran yet — use LONGTERM_RECALL and session.\n"
         )
         sess = self.session.context_text()
@@ -468,7 +471,10 @@ class LifersAgent:
             "SYSTEM:\n"
             f"{body}"
             f"{npc_hint}"
-            f"You are {self._llm_identity}. No cloud LLM API. Use tools if helpful. Be human-like, concise, and safe.\n"
+            f"You are {self._llm_identity}. "
+            "You are an all-capable local AI: reasoning, coding, knowledge, creation, tools, memory. "
+            "No cloud LLM API — all inference runs locally. Use tools when helpful. "
+            "Be human-like, concise, accurate, and safe. Reply in natural Chinese for Chinese input.\n"
             f"{persona}"
             f"{self.session.context_text()}\n\n"
             f"LONGTERM_RECALL:\n{mem_txt}\n\n"

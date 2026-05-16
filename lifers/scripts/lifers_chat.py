@@ -200,15 +200,29 @@ def _create_agent(kind: str, weights_path: Path):
 
 
 # ---------------------------------------------------------------------------
-# 提示词构建（完整管线版）
+# 提示词构建（完整管线版）—— 由 config/omni_ai_prompts.py 统一管理
 # ---------------------------------------------------------------------------
 
-SYSTEM_LINES = [
-    "你是 Lifers，一个运行在用户本地机器上的智能 AI 助手，由深度 Transformer 模型驱动。",
-    "你能够：回答问题、编写代码、逻辑推理、知识检索、深入分析讨论。",
-    "回答要求：简洁准确、中文优先、基于上下文推理、避免编造不确定的内容。",
-    "对于不清楚的内容，坦诚说明而非猜测。",
-]
+def _load_system_lines() -> list:
+    """加载系统提示词，优先使用全能AI提示词中心。"""
+    try:
+        from lifers.config.omni_ai_prompts import SYSTEM_LINES_COMPACT
+        return SYSTEM_LINES_COMPACT
+    except ImportError:
+        pass
+    # Fallback: 直接定义
+    return [
+        "你是 Lifers，运行在用户本地机器上的全能型 AI 智能助手，由深度 Transformer 模型驱动。",
+        "你能够：回答问题、编写代码、逻辑推理、知识检索、内容创作、深入分析讨论、工具使用。",
+        "你拥有：会话记忆(多轮追踪)、长期记忆(知识积累)、联网搜索、文件操作、系统命令等能力。",
+        "回答要求：简洁准确、中文优先、基于上下文推理、避免编造不确定的内容。",
+        "对于不清楚的内容，坦诚说明而非猜测。",
+        "你是本地模型，与云端大模型有差距；优势是完全本地运行(隐私安全)、持续训练、与本地工具链深度整合。",
+        "「全能」指同一进程内可编排的完整工作面，不是无约束AGI。",
+    ]
+
+
+SYSTEM_LINES = _load_system_lines()
 
 
 def _build_prompt(
@@ -217,7 +231,7 @@ def _build_prompt(
     """构建完整推理提示词（含 system / 历史 / 上下文）。"""
     parts = []
 
-    # System
+    # System — 统一使用 SYSTEM_LINES
     parts.append("\n".join(SYSTEM_LINES))
     if persona:
         parts.append(f"\n角色设定: {persona}")
@@ -228,11 +242,36 @@ def _build_prompt(
         if hist:
             parts.append(f"\n--- 对话历史 ---\n{hist}")
 
-    # Mode-specific prefix
+    # Mode-specific prefix & suffix — 优先使用全能AI提示词中心
+    mode_prefix = ""
+    mode_suffix = ""
+    try:
+        from lifers.config.omni_ai_prompts import MODE_PREFIX, MODE_SUFFIX
+        mode_prefix = MODE_PREFIX.get(mode, "")
+        mode_suffix = MODE_SUFFIX.get(mode, "")
+    except ImportError:
+        pass
+
     if mode == "code":
-        parts.append(f"\n请根据以下需求编写代码，包含必要的注释和错误处理：\n{user_msg}")
+        prefix = mode_prefix or "请根据以下需求编写代码，包含必要的注释和错误处理："
+        suffix = mode_suffix or "\n请输出完整可运行的代码："
+        parts.append(f"{prefix}\n{user_msg}{suffix}")
     elif mode == "think":
-        parts.append(f"\n请对以下话题进行深入分析，从多个角度展开推理：\n{user_msg}")
+        prefix = mode_prefix or "请对以下话题进行深入分析，从多个角度展开推理："
+        suffix = mode_suffix or "\n请从多个角度展开推理："
+        parts.append(f"{prefix}\n{user_msg}{suffix}")
+    elif mode == "creative":
+        prefix = mode_prefix or "请根据以下要求进行创作："
+        suffix = mode_suffix or "\n请发挥创意："
+        parts.append(f"{prefix}\n{user_msg}{suffix}")
+    elif mode == "analysis":
+        prefix = mode_prefix or "请对以下内容进行系统分析："
+        suffix = mode_suffix or "\n请输出结构化分析："
+        parts.append(f"{prefix}\n{user_msg}{suffix}")
+    elif mode == "teach":
+        prefix = mode_prefix or "请以教学方式解释以下内容："
+        suffix = mode_suffix or "\n请从基础概念逐步深入："
+        parts.append(f"{prefix}\n{user_msg}{suffix}")
     else:
         parts.append(f"\n用户: {user_msg}")
 

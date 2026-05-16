@@ -29,6 +29,11 @@ SYNC_FILES=(
     "requirements.txt"
     ".env.example"
     "weights/training_corpus.txt"
+    "config/omni_ai_prompts.py"
+    "config/lifers_ai_playbook_zh.md"
+    "config/stack.json"
+    "agent.py"
+    "tools/plugins/lifers_omni_skills/plugin.py"
 )
 
 do_sync() {

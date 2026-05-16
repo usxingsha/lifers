@@ -1,135 +1,93 @@
 """
-Merge portable Cursor user settings into VSCodium user-data settings.
-
-- Reads:   rs/data/cursor-user-data/User/settings.json (if present)
-- Defaults: rs/tools/vscodium_editor_defaults.json
-- Writes:   rs/data/user-data/User/settings.json
-
-Filters out Cursor/cloud/Copilot/login/paid/API-oriented keys that should not
-be carried to an offline, no-account editor profile (rs portable policy).
+tools/sync_cursor_settings_to_vscodium.py
+──────────────────────────────────────────
+Copies Cursor user settings → lifers VSCodium user-data directory.
+Skips keys that are Cursor-exclusive (AI/account/telemetry).
+Called from tasks.json "lifers: Sync Cursor settings to VSCodium user-data".
 """
-
-from __future__ import annotations
-
 import json
-import re
+import os
 import shutil
+import sys
 from pathlib import Path
 
+ROOT         = Path(__file__).parent.parent
+VSCODIUM_UD  = ROOT / "data" / "user-data" / "User"
 
-ROOT = Path(__file__).resolve().parents[1]
-CURSOR_USER = ROOT / "data" / "cursor-user-data" / "User"
-VSC_USER = ROOT / "data" / "user-data" / "User"
-CURSOR_SETTINGS = CURSOR_USER / "settings.json"
-OUT = VSC_USER / "settings.json"
-DEFAULTS = Path(__file__).with_name("vscodium_editor_defaults.json")
-
-BLOCK_PREFIXES: tuple[str, ...] = (
-    "cursor.",
-    "anysphere.",
-    "github.copilot",
-    "extensions.experimental.affinity",
-    "openai.",
-    "anthropic.",
-    "telemetry.",
-    "aws.telemetry",
-    "redhat.telemetry",
-)
-
-BLOCK_KEYS: frozenset[str] = frozenset(
-    {
-        "github.copilot.enable",
-        "http.proxyAuthorization",
-    }
-)
-
-BLOCK_REGEX = [
-    re.compile(r"^sync\."),
-    re.compile(r"^chat\."),
-    re.compile(r"^github\.copilot"),
-    re.compile(r"apikey"),
-    re.compile(r"api_key"),
+# Cursor user settings locations (try both)
+_CURSOR_CANDIDATES = [
+    Path(os.environ.get("APPDATA", "")) / "Cursor" / "User" / "settings.json",
+    Path(os.environ.get("USERPROFILE", "")) / ".cursor" / "User" / "settings.json",
 ]
 
-
-def should_drop(key: str) -> bool:
-    kl = key.lower()
-    if kl.startswith(BLOCK_PREFIXES):
-        return True
-    if key in BLOCK_KEYS:
-        return True
-    for bad in ("apikey", "api_key", "secret", "token", "password", "bearer", "oauth"):
-        if bad not in kl:
-            continue
-        if any(
-            x in kl
-            for x in (
-                "openai",
-                "anthropic",
-                "anysphere",
-                "cursor",
-                "github",
-                "copilot",
-                "tabnine",
-                "codeium",
-                "cody",
-            )
-        ):
-            return True
-    for rx in BLOCK_REGEX:
-        if rx.search(kl):
-            return True
-    return False
+# Keys to drop (Cursor-specific, not valid in VSCodium)
+_DROP_PREFIXES = (
+    "cursor.",
+    "github.copilot",
+    "telemetry.",
+    "workbench.enableExperiments",
+    "update.",
+)
 
 
-def load_json(path: Path) -> dict:
-    if not path.is_file():
-        return {}
-    text = path.read_text(encoding="utf-8")
-    if not text.strip():
-        return {}
-    return json.loads(text)
+def find_cursor_settings() -> Path | None:
+    for p in _CURSOR_CANDIDATES:
+        if p.exists():
+            return p
+    return None
 
 
-def copy_optional_user_files() -> None:
-    """Copy keybindings + snippets when present (VS Code compatible)."""
-    kb_src = CURSOR_USER / "keybindings.json"
-    kb_dst = VSC_USER / "keybindings.json"
-    if kb_src.is_file():
-        VSC_USER.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(kb_src, kb_dst)
-        print(f"Copied: {kb_dst}")
+def filter_settings(raw: dict) -> dict:
+    return {
+        k: v for k, v in raw.items()
+        if not any(k.startswith(pfx) for pfx in _DROP_PREFIXES)
+    }
 
-    snip_src = CURSOR_USER / "snippets"
-    snip_dst = VSC_USER / "snippets"
-    if snip_src.is_dir():
-        if snip_dst.exists():
-            shutil.rmtree(snip_dst)
-        shutil.copytree(snip_src, snip_dst)
-        print(f"Copied: {snip_dst}")
+
+def merge_settings(cursor: dict, existing: dict) -> dict:
+    """Cursor settings are base; existing VSCodium settings win on conflict."""
+    merged = {**cursor, **existing}
+    return merged
 
 
 def main() -> int:
-    defaults = load_json(DEFAULTS)
-    cursor_user = load_json(CURSOR_SETTINGS)
+    cursor_path = find_cursor_settings()
+    if not cursor_path:
+        print("Cursor settings not found — nothing to sync")
+        return 0
 
-    merged = dict(defaults)
-    dropped = []
-    for k, v in cursor_user.items():
-        if should_drop(k):
-            dropped.append(k)
-            continue
-        merged[k] = v
+    print(f"Cursor settings: {cursor_path}")
+    with cursor_path.open(encoding="utf-8") as f:
+        cursor_settings = json.load(f)
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(merged, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    filtered = filter_settings(cursor_settings)
+    print(f"  Kept {len(filtered)}/{len(cursor_settings)} keys (dropped Cursor-only)")
 
-    print(f"Wrote: {OUT}")
-    copy_optional_user_files()
-    if dropped:
-        print(f"Dropped {len(dropped)} Cursor/cloud-only keys (sample): {dropped[:12]}")
+    VSCODIUM_UD.mkdir(parents=True, exist_ok=True)
+    target = VSCODIUM_UD / "settings.json"
+
+    existing: dict = {}
+    if target.exists():
+        try:
+            with target.open(encoding="utf-8") as f:
+                existing = json.load(f)
+            print(f"  Existing VSCodium settings: {len(existing)} keys")
+        except json.JSONDecodeError:
+            print("  Existing VSCodium settings corrupted — overwriting")
+
+    merged = merge_settings(filtered, existing)
+
+    # Backup
+    if target.exists():
+        shutil.copy2(target, target.with_suffix(".json.bak"))
+        print(f"  Backup: {target.with_suffix('.json.bak')}")
+
+    with target.open("w", encoding="utf-8") as f:
+        json.dump(merged, f, ensure_ascii=False, indent=2)
+
+    print(f"  Written {len(merged)} keys → {target}")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())

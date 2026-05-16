@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lifers"
+version = "0.2.0"
+description = "Lifers - local AI terminal assistant"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "rich>=13.0",
+]
+license = {text = "MIT"}
+
+[project.scripts]
+lifers = "lifers.scripts.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lifers", "lifers.*"]

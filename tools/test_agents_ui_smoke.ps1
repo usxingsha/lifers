@@ -1,9 +1,9 @@
 #Requires -Version 5.1
-# Quick smoke test: Lifers (rs/lifers or rs/lifers_brain) bridge + lifers-agents-ui on disk.
+# Quick smoke test: Lifers (rs/lifers or rs/lifers) bridge + lifers-agents-ui on disk.
 $ErrorActionPreference = 'Stop'
 $rsRoot = Split-Path -Parent $PSScriptRoot
 $candidate = Join-Path $rsRoot 'lifers'
-$legacy = Join-Path $rsRoot 'lifers_brain'
+$legacy = Join-Path $rsRoot 'lifers'
 $brain = if (Test-Path -LiteralPath (Join-Path $candidate 'scripts\agent_bridge_once.py')) { $candidate } else { $legacy }
 $bridge = Join-Path $brain 'scripts\agent_bridge_once.py'
 $ext = Join-Path $brain 'extensions\lifers-agents-ui\extension.js'

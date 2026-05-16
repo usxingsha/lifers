@@ -5,8 +5,8 @@ alwaysApply: true
 
 ## 布局
 
-- 便携根目录名 **`lifers`**；智脑在 **`lifers_brain/`**，运行时真相 **`lifers_brain/config/stack.json`**。
-- 本地对话权重：**`lifers_brain/weights/lifers_transformer.json`**（训练产物；已移除仓库内玩具 `tiny_transformer_v001` 后备）。
+- 便携根目录名 **`lifers`**；智脑在 **`lifers/`**，运行时真相 **`lifers/config/stack.json`**。
+- 本地对话权重：**`lifers/weights/lifers_transformer.json`**（训练产物；已移除仓库内玩具 `tiny_transformer_v001` 后备）。
 - 对照源码（非 Python 运行时）：**`third_party/openclaw`**（git 子模块）、**`third_party/claw_code_rust`**（vendor）。勿把 npm/Rust 网关写进 `stack.brain` 当默认对话后端。
 
 ## 边训练边用

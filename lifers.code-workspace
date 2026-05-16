@@ -9,72 +9,12 @@
       "path": "."
     },
     {
-      "name": "lifers_brain",
-      "path": "./lifers_brain"
+      "name": "lifers",
+      "path": "./lifers"
     }
   ],
   "settings": {
-    "editor.tabSize": 4,
-    "editor.insertSpaces": true,
-    "editor.wordWrap": "on",
-    "editor.minimap.enabled": true,
-    "editor.bracketPairColorization.enabled": true,
-    "editor.guides.bracketPairs": "active",
-    "editor.renderWhitespace": "selection",
-    "workbench.editor.enablePreview": false,
-    "explorer.confirmDelete": true,
-    "explorer.confirmDragAndDrop": true,
-    "files.exclude": {},
-    "files.autoGuessEncoding": true,
-    "files.trimTrailingWhitespace": false,
-    "search.exclude": {
-      "**/node_modules": true,
-      "**/.venv": true,
-      "**/shell/**/node_modules": true
-    },
-    "files.watcherExclude": {
-      "**/.git/objects/**": true,
-      "**/node_modules/**": true,
-      "**/.venv/**": true
-    },
-    "explorer.excludeGitIgnore": false,
-    "search.useIgnoreFiles": true,
-    "terminal.integrated.scrollback": 8000,
-    "editor.unicodeHighlight.ambiguousCharacters": true,
-    "editor.unicodeHighlight.invisibleCharacters": true,
-    "cSpell.enabled": true,
-    "cSpell.language": "en,zh-CN",
-    "python.defaultInterpreterPath": "${workspaceFolder:lifers_brain}/.venv/Scripts/python.exe",
-    "python.analysis.extraPaths": [
-      "${workspaceFolder:lifers_brain}"
-    ],
-    "python.terminal.activateEnvironment": true,
-    "lifers.pythonPath": "python",
-    "lifers.model": "lifers",
-    "lifers.sandbox": false,
-    "lifers.httpDirect": true,
-    "lifers.remoteChat": false,
-    "lifers.gateAutoStart": true,
-    "lifers.gatePort": 55555,
-    "lifers.openChatOnStartup": true,
-    "lifers.openSessionSidebarOnStartup": true,
-    "lifers.autoCreateSessionOnStart": true,
-    "lifers.contextMaxFiles": 48,
-    "lifers.bridgeContextMaxFiles": 32,
-    "lifers.bridgeTimeoutMs": 900000,
-    "lifers.contextFolderMaxCollect": 96,
-    "lifers.contextFolderMaxDepth": 6,
-    "lifers.contextFolderSkipDirs": [
-      "node_modules",
-      ".git",
-      ".venv",
-      "__pycache__",
-      ".cursor",
-      "dist",
-      "build",
-      "target",
-      ".idea",
-      "shell"
-    ]
+    "lifers.bridgeTimeoutMs": 120000,
+    "lifers.edgeGenerateTimeoutSec": 110
   }
 }

@@ -6,8 +6,8 @@ if (-not $RsRoot) {
   $RsRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 }
 $DataExt = Join-Path $RsRoot "data\extensions"
-$ExtSrc = Join-Path $RsRoot "lifers_brain\extensions\lifers-agents-ui"
-$repairPy = Join-Path $RsRoot "lifers_brain\scripts\repair_lifers_extensions_index.py"
+$ExtSrc = Join-Path $RsRoot "lifers\extensions\lifers-agents-ui"
+$repairPy = Join-Path $RsRoot "lifers\scripts\repair_lifers_extensions_index.py"
 if (!(Test-Path (Join-Path $ExtSrc "package.json"))) { throw "missing $ExtSrc" }
 if (!(Test-Path $repairPy)) { throw "missing $repairPy" }
 

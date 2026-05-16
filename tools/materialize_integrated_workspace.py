@@ -44,6 +44,14 @@ def main() -> int:
         name = str(r.get("name", r.get("id", "folder"))).strip()
         rel = str(r.get("path", ".")).strip()
         folders.append({"name": name, "path": rel})
+    # integrated_layout.json 历史上用 workspaces[] 而未有 roots[] 时，避免写出空 folders。
+    if not folders:
+        for w in data.get("workspaces") or []:
+            if not isinstance(w, dict):
+                continue
+            name = str(w.get("id") or w.get("name") or "folder").strip()
+            rel = str(w.get("path", ".")).strip()
+            folders.append({"name": name, "path": rel})
 
     raw_ws = data.get("workspace_settings") or {}
     settings: Dict[str, Any] = {}

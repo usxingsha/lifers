@@ -1,6 +1,0 @@
-{"id":"sim-001","task":"go_to_point","scene":"room_v1","goal":{"target_xy":[2.0,1.5]},"constraints":{"max_speed":1.0},"metrics":["success","time_s","path_length","mean_jerk","max_jerk"]}
-{"id":"sim-002","task":"avoid_obstacle","scene":"hallway_v1","goal":{"target_xy":[8.0,0.0]},"constraints":{"min_clearance":0.4},"metrics":["success","min_clearance","collisions","accel_spike_count","mean_jerk"]}
-{"id":"sim-003","task":"pick_and_place","scene":"table_v1","goal":{"object":"cup","place_xy":[0.3,-0.2]},"constraints":{"max_grip_force":8.0},"metrics":["success","drops","contact_impulses","pause_count","pause_duration_mean","gaze_on_target_ratio"]}
-{"id":"sim-004","task":"handover","scene":"human_v1","goal":{"object":"bottle","handover_pose":"front"},"constraints":{"min_distance_to_human":0.6,"approach_speed_near_human":0.3},"metrics":["success","min_distance_to_human","approach_speed_near_human","yield_rate"]}
-{"id":"sim-005","task":"social_navigation","scene":"crowd_v1","goal":{"target_xy":[10.0,2.0]},"constraints":{"min_distance_to_human":0.7},"metrics":["success","min_distance_to_human","stops_near_human","emergency_stop_rate","mean_jerk"]}
-

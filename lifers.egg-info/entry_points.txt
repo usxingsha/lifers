@@ -1,0 +1,2 @@
+[console_scripts]
+lifers = lifers.scripts.cli:main

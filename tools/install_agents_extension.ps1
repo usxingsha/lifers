@@ -15,7 +15,7 @@ if ($env:LIFERS_EXT_INSTALL_TARGETS -match '^(?i)vscodium$') {
     $EditorTargets = 'Vscodium'
 }
 $candidate = Join-Path $rsRoot 'lifers\extensions\lifers-agents-ui'
-$legacy = Join-Path $rsRoot 'lifers_brain\extensions\lifers-agents-ui'
+$legacy = Join-Path $rsRoot 'lifers\extensions\lifers-agents-ui'
 $src = if (Test-Path -LiteralPath (Join-Path $candidate 'package.json')) { $candidate } else { $legacy }
 $pkgPath = Join-Path $src 'package.json'
 if (-not (Test-Path -LiteralPath $pkgPath)) { throw "Missing $pkgPath" }

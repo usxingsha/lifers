@@ -3,7 +3,7 @@
   "folders": [
     { "name": "rs0", "path": "./rs0" },
     { "name": "lifers", "path": "." },
-    { "name": "lifers_brain", "path": "./lifers_brain" }
+    { "name": "lifers", "path": "./lifers" }
   ],
   "editor.fontSize": 14,
   "editor.fontFamily": "Consolas, 'Courier New', monospace"

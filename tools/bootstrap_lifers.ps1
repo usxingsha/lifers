@@ -1,82 +1,120 @@
-#Requires -Version 5.1
-# One-shot: materialize workspace, integrated_layout bootstrap (prune + conditional materialize),
-#           Lifers Agents UI, marketplace recommendations, Cursor->VSCodium settings sync,
-#           optional ..\lifers app junction, smoke test.
-# Portable root folder may be named `lifers` (historically `rs`); paths below are relative to that root.
+# bootstrap_lifers.ps1
+# Auto-deploy: venv, extensions, directories, workspace validation
 param(
     [switch]$SkipMarketplace,
-    [switch]$PortableExtensionsOnly,
-    [switch]$SkipIntegratedBootstrap,
-    [switch]$SkipSyncVscodium,
-    [switch]$SkipLinkLifers,
-    [switch]$SkipSmoke
+    [switch]$SkipVenv,
+    [switch]$Verbose
 )
 
-$ErrorActionPreference = 'Stop'
-$toolsDir = $PSScriptRoot
-$portableRoot = Split-Path -Parent $toolsDir
-Set-Location -LiteralPath $portableRoot
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
 
-Write-Host '== lifers materialize workspace (lifers.code-workspace) =='
-$mat = Join-Path $toolsDir 'materialize_integrated_workspace.py'
-if (-not (Test-Path -LiteralPath $mat)) { throw "Missing $mat" }
-python $mat
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$ROOT   = Split-Path $PSScriptRoot -Parent
+$BRAIN  = Join-Path $ROOT "lifers"
+$VENV   = Join-Path $BRAIN ".venv"
+$DATA   = Join-Path $ROOT "data"
+$EXTDIR = Join-Path $DATA "extensions"
+$UDDIR  = Join-Path $DATA "user-data"
 
-if (-not $SkipIntegratedBootstrap) {
-    Write-Host '== integrated_layout bootstrap (prune_paths + materialize if layout newer) =='
-    $integ = Join-Path $toolsDir 'run_integrated_bootstrap.py'
-    if (-not (Test-Path -LiteralPath $integ)) { throw "Missing $integ" }
-    python $integ
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-}
+Write-Host "`n=== Lifers Bootstrap ===" -ForegroundColor Cyan
+Write-Host "Root: $ROOT"
 
-Write-Host '== Lifers Agents UI (copy extension) =='
-$agentsParams = @{}
-if ($PortableExtensionsOnly) { $agentsParams['EditorTargets'] = 'Vscodium' }
-& (Join-Path $toolsDir 'install_agents_extension.ps1') @agentsParams
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-Write-Host '== Marketplace recommendations (extensions.json) =='
-$params = @{}
-if ($SkipMarketplace) { $params['SkipMarketplace'] = $true }
-if ($PortableExtensionsOnly) { $params['PortableOnly'] = $true }
-& (Join-Path $toolsDir 'install_recommended_extensions.ps1') @params
-
-if (-not $SkipSyncVscodium) {
-    Write-Host '== Sync Cursor user settings -> data/user-data (VSCodium portable) =='
-    $sync = Join-Path $toolsDir 'sync_cursor_settings_to_vscodium.py'
-    if (Test-Path -LiteralPath $sync) {
-        python $sync
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+# ── 1. Directory scaffold ─────────────────────────────────────────────────────
+$dirs = @(
+    (Join-Path $BRAIN "config\personas"),
+    (Join-Path $BRAIN "core\npc"),
+    (Join-Path $BRAIN "scripts"),
+    (Join-Path $BRAIN "memory"),
+    (Join-Path $BRAIN "weights"),
+    (Join-Path $ROOT  "config"),
+    (Join-Path $ROOT  "third_party"),
+    (Join-Path $ROOT  "shell"),
+    $EXTDIR,
+    $UDDIR
+)
+foreach ($d in $dirs) {
+    if (-not (Test-Path $d)) {
+        New-Item -ItemType Directory -Path $d -Force | Out-Null
+        Write-Host "  [+] Created $d" -ForegroundColor Green
     }
 }
 
-if (-not $SkipLinkLifers) {
-    $siblingLifers = Join-Path $portableRoot '..\lifers'
-    if (Test-Path -LiteralPath $siblingLifers) {
-        $sib = (Resolve-Path -LiteralPath $siblingLifers).Path
-        if ($sib -ieq (Resolve-Path -LiteralPath $portableRoot).Path) {
-            Write-Host '== Skip link_lifers_app (sibling ..\lifers is the same as portable root) =='
-        } else {
-            Write-Host '== Optional lifers app junction (portable\lifers -> ..\lifers) =='
-            $prevEap = $ErrorActionPreference
-            $ErrorActionPreference = 'Continue'
-            & (Join-Path $toolsDir 'link_lifers_app.ps1') 2>&1 | ForEach-Object { Write-Host $_ }
-            $ErrorActionPreference = $prevEap
-        }
+# ── 2. Python venv ────────────────────────────────────────────────────────────
+if (-not $SkipVenv) {
+    Write-Host "`n--- Python venv ---" -ForegroundColor Yellow
+    $py = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $py) {
+        Write-Warning "python not found in PATH — skipping venv creation"
     } else {
-        Write-Host '== Skip link_lifers_app (no sibling ..\lifers) =='
+        if (-not (Test-Path (Join-Path $VENV "Scripts\python.exe"))) {
+            Write-Host "  Creating venv at $VENV ..."
+            & python -m venv $VENV
+        } else {
+            Write-Host "  Venv already exists." -ForegroundColor Green
+        }
+        $pip = Join-Path $VENV "Scripts\pip.exe"
+        $req = Join-Path $BRAIN "requirements.txt"
+        if (Test-Path $req) {
+            Write-Host "  Installing requirements.txt ..."
+            & $pip install -r $req --quiet
+        } else {
+            Write-Host "  No requirements.txt found — installing base deps ..."
+            & $pip install requests uvicorn fastapi sqlite-utils --quiet
+        }
     }
-} else {
-    Write-Host '== Skip link_lifers_app (-SkipLinkLifers) =='
 }
 
-if (-not $SkipSmoke) {
-    Write-Host '== Agents UI smoke test =='
-    & (Join-Path $toolsDir 'test_agents_ui_smoke.ps1')
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+# ── 3. VSCodium / VSCode extension install ────────────────────────────────────
+if (-not $SkipMarketplace) {
+    Write-Host "`n--- Extension install ---" -ForegroundColor Yellow
+    $exts = @(
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "streetsidesoftware.code-spell-checker"
+    )
+    $cliCandidates = @(
+        (Join-Path $ROOT "shell\VSCodium\bin\codium.cmd"),
+        (Join-Path $ROOT "shell\VSCode\bin\code.cmd"),
+        "$env:LOCALAPPDATA\Programs\VSCodium\bin\codium.cmd",
+        "$env:LOCALAPPDATA\Programs\Microsoft VS Code\bin\code.cmd"
+    )
+    $cli = $null
+    foreach ($c in $cliCandidates) {
+        if (Test-Path $c) { $cli = $c; break }
+    }
+    if ($cli) {
+        foreach ($ext in $exts) {
+            Write-Host "  Installing $ext ..."
+            & $cli --extensions-dir $EXTDIR --install-extension $ext 2>&1 | Out-Null
+        }
+        Write-Host "  Extensions done." -ForegroundColor Green
+    } else {
+        Write-Warning "No VSCodium/VSCode CLI found — skipping extension install"
+    }
 }
 
-Write-Host ''
-Write-Host 'Bootstrap OK. Open lifers\lifers.code-workspace. Portable: run_lifers_vscodium.bat -> data\extensions. Reload window if the editor was open.'
+# ── 4. Validate critical files ────────────────────────────────────────────────
+Write-Host "`n--- Validating critical files ---" -ForegroundColor Yellow
+$critical = @(
+    (Join-Path $BRAIN "config\stack.json"),
+    (Join-Path $BRAIN "config\tokenizer.json"),
+    (Join-Path $BRAIN "scripts\run_agent.py"),
+    (Join-Path $BRAIN "scripts\agent_bridge.py")
+)
+$missing = @()
+foreach ($f in $critical) {
+    if (Test-Path $f) {
+        Write-Host "  [OK] $f" -ForegroundColor Green
+    } else {
+        Write-Host "  [!!] MISSING: $f" -ForegroundColor Red
+        $missing += $f
+    }
+}
+
+# ── 5. Summary ────────────────────────────────────────────────────────────────
+Write-Host "`n=== Bootstrap complete ===" -ForegroundColor Cyan
+if ($missing.Count -gt 0) {
+    Write-Warning "$($missing.Count) critical file(s) missing — see above"
+    exit 1
+}
+Write-Host "All checks passed. Run run_lifers_agent.bat to start." -ForegroundColor Green

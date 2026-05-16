@@ -7,26 +7,26 @@
 /shell/
 
 # 打包产物（Kali 推送包等）；需要时在本地重新运行 package_rs_for_kali.ps1
-/lifers_brain/dist/*.tar.gz
-/lifers_brain/dist/*.tgz
+/lifers/dist/*.tar.gz
+/lifers/dist/*.tgz
 
 # 本地二进制壳（可选）
 /LifersShell.exe
 
-# 大权重：从 Kali 拉取，勿入版本库（见 lifers_brain/scripts/sync_weights_from_kali.ps1）
-/lifers_brain/weights/lifers_transformer.json
-/lifers_brain/weights/.train_status.json
-/lifers_brain/extensions/lifers-agents-ui/media/phoenix-void.png
+# 大权重：从 Kali 拉取，勿入版本库（见 lifers/scripts/sync_weights_from_kali.ps1）
+/lifers/weights/lifers_transformer.json
+/lifers/weights/.train_status.json
+/lifers/extensions/lifers-agents-ui/media/phoenix-void.png
 
 # 每日 AI 健康报告（本地/计划任务生成）
-/lifers_brain/state/daily_health/
+/lifers/state/daily_health/
 
 # 会话侧本地状态
-/lifers_brain/.lifers/
+/lifers/.lifers/
 
 # 运行期日志与本地记忆库（勿入库）
-/lifers_brain/logs/
-/lifers_brain/memory/*.sqlite3
+/lifers/logs/
+/lifers/memory/*.sqlite3
 
 # 本地 data/（Cursor 状态、扩展缓存、用户数据等）不进入版本库
 /data/

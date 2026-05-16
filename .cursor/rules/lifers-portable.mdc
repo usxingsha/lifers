@@ -5,8 +5,8 @@ alwaysApply: true
 
 # Lifers 仓库
 
-- **智脑根**：`lifers_brain/`（Python 包 `lifers_brain`）。运行脚本前通常 `PYTHONPATH=.`，工作目录优先 `lifers_brain`。
-- **配置真源**：`lifers_brain/config/stack.json`；联运默认与物化见便携根 **`config/integrated_layout.json`** → **`lifers.code-workspace`**。
-- **OpenClaw / claw-code**：仅 `third_party/` 对照与清单（`lifers_brain/config/openclaw_manifest.json` 等），**不在 Lifers Python 进程内**启动其网关。
-- **Agents UI**：源码在 `lifers_brain/extensions/lifers-agents-ui`；未上架市场时用 **Install from Folder** 或 `tools/install_agents_extension.ps1`。
+- **智脑根**：`lifers/`（Python 包 `lifers`）。运行脚本前通常 `PYTHONPATH=.`，工作目录优先 `lifers`。
+- **配置真源**：`lifers/config/stack.json`；联运默认与物化见便携根 **`config/integrated_layout.json`** → **`lifers.code-workspace`**。
+- **OpenClaw / claw-code**：仅 `third_party/` 对照与清单（`lifers/config/openclaw_manifest.json` 等），**不在 Lifers Python 进程内**启动其网关。
+- **Agents UI**：源码在 `lifers/extensions/lifers-agents-ui`；未上架市场时用 **Install from Folder** 或 `tools/install_agents_extension.ps1`。
 - **rs0**：多根工作区首项，可为空；占位/本地辅助，**非**运行时依赖。

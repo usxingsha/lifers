@@ -814,16 +814,26 @@ DOMAIN_GENERATORS: List[Tuple[str, Callable[[], str]]] = [
 ]
 
 
-def expand_corpus(root: Path, domains: List[str] | None = None) -> int:
-    """扩展训练语料库，返回新增字节数"""
+def expand_corpus(root: Path, domains: List[str] | None = None, force: bool = False) -> int:
+    """扩展训练语料库，返回新增字节数。如已注入则跳过(除非force=True)。"""
     corpus_path = root / "weights" / "training_corpus.txt"
     corpus_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # 检查已注入的领域
+    existing_content = ""
+    if corpus_path.exists():
+        existing_content = corpus_path.read_text(encoding="utf-8")
 
     total_added = 0
     added_domains = []
 
     for domain_name, generator in DOMAIN_GENERATORS:
         if domains and domain_name not in domains:
+            continue
+        # 检查标记，避免重复注入
+        marker = f"# Lifers {domain_name}"
+        if not force and marker in existing_content:
+            print(f"[Lifers-Corpus] 跳过 {domain_name} (已存在)")
             continue
         content = generator()
         with open(corpus_path, "a", encoding="utf-8") as f:
@@ -832,12 +842,12 @@ def expand_corpus(root: Path, domains: List[str] | None = None) -> int:
         added_domains.append(domain_name)
         print(f"[Lifers-Corpus] +{domain_name} ({len(content)} chars)")
 
-    # 追加标记
-    with open(corpus_path, "a", encoding="utf-8") as f:
-        marker = f"\n# Lifers 品牌化语料扩展完成 — {len(added_domains)} 领域已注入 ({total_added/1024:.1f} KB)\n"
-        f.write(marker)
+    if added_domains:
+        with open(corpus_path, "a", encoding="utf-8") as f:
+            marker = f"\n# Lifers 品牌化语料扩展完成 — {len(added_domains)} 领域已注入 ({total_added/1024:.1f} KB)\n"
+            f.write(marker)
 
-    print(f"[Lifers-Corpus] 总计注入 {len(added_domains)} 领域, {total_added/1024:.1f} KB")
+    print(f"[Lifers-Corpus] 注入 {len(added_domains)} 新领域, 跳过 {len(DOMAIN_GENERATORS) - len(added_domains)} 已有, {total_added/1024:.1f} KB")
     return total_added
 
 

@@ -42,6 +42,20 @@ def train_kg():
     train_lifers_kg(n_epochs=epochs, verbose=True)
 
 
+def train_safety():
+    """训练安全分类器"""
+    from lifers.scripts.train_lifers_safety import train_safety_classifier
+    epochs = int(os.environ.get("LIFERS_SAFETY_EPOCHS", "150"))
+    train_safety_classifier(n_epochs=epochs, verbose=True)
+
+
+def train_perception():
+    """训练场景分类器"""
+    from lifers.scripts.train_lifers_perception import train_perception_classifier
+    epochs = int(os.environ.get("LIFERS_PERCEPTION_EPOCHS", "300"))
+    train_perception_classifier(n_epochs=epochs, verbose=True)
+
+
 def train_all():
     """运行全部训练"""
     print("=" * 60)
@@ -50,17 +64,23 @@ def train_all():
 
     t0 = time.time()
 
-    print("\n[1/4] 语料库扩展...")
+    print("\n[1/6] 语料库扩展...")
     train_corpus()
 
-    print("\n[2/4] 知识图谱嵌入训练...")
+    print("\n[2/6] 知识图谱嵌入训练...")
     train_kg()
 
-    print("\n[3/4] 语音声学模型训练...")
+    print("\n[3/6] 语音声学模型训练...")
     train_voice()
 
-    print("\n[4/4] RL策略网络训练...")
+    print("\n[4/6] RL策略网络训练...")
     train_rl()
+
+    print("\n[5/6] 安全分类器训练...")
+    train_safety()
+
+    print("\n[6/6] 场景分类器训练...")
+    train_perception()
 
     elapsed = time.time() - t0
     print(f"\n{'=' * 60}")
@@ -74,6 +94,8 @@ PILLARS = {
     "rl": train_rl,
     "voice": train_voice,
     "kg": train_kg,
+    "safety": train_safety,
+    "perception": train_perception,
     "all": train_all,
 }
 

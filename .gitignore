@@ -54,3 +54,11 @@ __pycache__/
 
 # 可选：本机临时对照检出目录（勿默认入库）
 /third_party/_refs/
+
+# IDE / editor noise
+.vscode/
+*.code-workspace
+
+# OS noise
+.DS_Store
+Thumbs.db

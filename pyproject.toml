@@ -11,6 +11,18 @@ dependencies = [
     "numpy>=1.24",
     "rich>=13.0",
 ]
+
+[project.optional-dependencies]
+vector = [
+    "faiss-cpu>=1.7",
+    "chromadb>=0.4",
+    "lancedb>=0.15",
+    "sentence-transformers>=2.2",
+]
+faiss = ["faiss-cpu>=1.7"]
+chroma = ["chromadb>=0.4"]
+lancedb = ["lancedb>=0.15"]
+embeddings = ["sentence-transformers>=2.2"]
 license = {text = "MIT"}
 
 [project.scripts]

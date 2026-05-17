@@ -58,6 +58,20 @@
       "transformer": "weights/lifers_transformer.json"
     },
     "memory_db": "memory/longterm.sqlite3",
+    "vector_db": {
+      "enabled": false,
+      "backend": "faiss",
+      "dim": 256,
+      "embed_kind": "tfidf",
+      "embed_model": "all-MiniLM-L6-v2",
+      "faiss_path": "memory/vector.faiss",
+      "chroma_path": "memory/chroma",
+      "lancedb_uri": "memory/lancedb",
+      "collection": "lifers_memory",
+      "tfidf_path": "memory/tfidf_embedder.json",
+      "hybrid_weights": { "vector": 0.6, "fts": 0.4 },
+      "note_zh": "向量库默认关闭；启用后 add/search/prune 自动同步。backend: faiss|chroma|lancedb。embed_kind: tfidf|sentence_transformer。FAISS 无需额外服务进程，推荐边缘部署。"
+    },
     "audit_log": "logs/audit.jsonl",
     "self_code": {
       "enabled": true,
@@ -201,5 +215,121 @@
     "enabled": true,
     "rel_dir": "tools/plugins",
     "note_zh": "默认启用全能AI技能插件 (lifers_omni_skills: calculator/grep_search/sys_monitor/csv_process/json_query/file_download/git_helper)"
+  },
+  "knowledge_graph": {
+    "enabled": true,
+    "embed_dim": 128,
+    "db_path": "memory/knowledge_graph.json",
+    "seed_with_ontology": true,
+    "note_zh": "实体-关系知识图谱；支持类比推理、扩散激活、路径查询"
+  },
+  "deep_planner": {
+    "enabled": true,
+    "mcts_iterations": 200,
+    "mcts_exploration": 1.414,
+    "reflection_max_history": 100,
+    "note_zh": "分层任务网络(HTN)+蒙特卡洛树搜索(MCTS)+自我反思引擎"
+  },
+  "voice": {
+    "enabled": true,
+    "wakeword": "lifers",
+    "wakeword_threshold": 0.6,
+    "sample_rate": 16000,
+    "tts_default_duration_sec": 2.0,
+    "note_zh": "语音闭环：唤醒词检测 → ASR → 推理 → TTS → 播放。纯numpy DSP"
+  },
+  "safety": {
+    "enabled": true,
+    "constitutional": true,
+    "sandbox_timeout_sec": 30,
+    "sandbox_allow_network": false,
+    "note_zh": "Lifers宪章对齐 + 内容安全过滤 + 提示注入检测 + 沙盒执行"
+  },
+  "swarm": {
+    "enabled": true,
+    "default_team": ["researcher", "coder", "critic", "executor", "planner", "memory_keeper"],
+    "max_rounds": 5,
+    "note_zh": "多智能体协作：研究员/工程师/评审者/执行者/规划者/记忆守护者"
+  },
+  "reinforcement_learning": {
+    "enabled": true,
+    "state_dim": 32,
+    "action_dim": 8,
+    "hidden_dim": 128,
+    "lr": 0.0003,
+    "gamma": 0.99,
+    "replay_capacity": 5000,
+    "update_interval": 50,
+    "curiosity_enabled": true,
+    "note_zh": "PPO+经验回放+好奇心驱动探索；持续在线学习"
+  },
+  "robot_hal": {
+    "enabled": true,
+    "sim_mode": true,
+    "camera_index": 0,
+    "camera_width": 640,
+    "camera_height": 480,
+    "sample_rate": 16000,
+    "note_zh": "硬件抽象层：相机/麦克风/激光雷达/GPS/电机/舵机/扬声器/显示；仿真模式用numpy模拟"
+  },
+  "simulation": {
+    "enabled": true,
+    "scenarios_path": "sim/scenarios",
+    "benchmark_output": "logs/benchmarks.jsonl",
+    "note_zh": "仿真场景库：导航/操作/社交/探索；基准跑分与评估"
+  },
+  "telemetry": {
+    "enabled": true,
+    "export_interval_sec": 30,
+    "prometheus_format": false,
+    "json_export_path": "state/telemetry.json",
+    "note_zh": "LifersPulse 遥测：Counter/Gauge/Histogram + Span追踪 + JSON导出"
+  },
+  "dashboard": {
+    "enabled": true,
+    "host": "127.0.0.1",
+    "port": 55556,
+    "note_zh": "Lifers Console Web仪表盘；纯stdlib HTTP + 嵌入式HTML；访问 http://127.0.0.1:55556"
+  },
+  "perception": {
+    "enabled": true,
+    "interval_ms": 100,
+    "motion_threshold": 0.03,
+    "change_threshold": 0.05,
+    "situation_history": 200,
+    "note_zh": "Lifers Senses 实时感知：视觉(运动/变化/注意力)+听觉(8类声音分类/异常检测)+情境融合理解"
+  },
+  "proactive": {
+    "enabled": true,
+    "think_interval_ms": 200,
+    "min_urgency_to_speak": 0.4,
+    "cooldown_sec": 5.0,
+    "max_utterances_per_minute": 6,
+    "silence_after_speech_sec": 2.0,
+    "note_zh": "Lifers Proactive 主动行为：感知→思考→决策→主动说话/行动。6种内在驱力：好奇/安全/社交/探索/学习/助人"
+  },
+  "social": {
+    "enabled": true,
+    "relations_db": "memory/social_relations.json",
+    "learning_db": "memory/social_learning.json",
+    "default_identity": {
+      "name": "Lifers",
+      "personality": "友好、好奇、忠诚、乐于助人",
+      "speaking_style": "自然、简洁、真诚"
+    },
+    "owner_ceremony": {
+      "require_ceremony": true,
+      "ceremony_keywords": ["认主", "主人", "所有者", "绑定"]
+    },
+    "attachment": {
+      "separation_anxiety_threshold": 0.5,
+      "miss_check_interval_sec": 600
+    },
+    "interaction_evolution": {
+      "enable_auto_evolve": true,
+      "min_interactions_for_friend": 20,
+      "min_interactions_for_close_friend": 50
+    },
+    "note_zh": "Lifers Social 人类社交认知：9级关系深度(主人→已屏蔽)+认主+识人+依恋+社交学习+行为调节。像人类一样建立维护社交关系"
   }
 }

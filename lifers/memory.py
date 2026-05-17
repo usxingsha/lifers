@@ -8,7 +8,9 @@ import time
 import hashlib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
+
+import numpy as np
 
 MemoryType = Literal[
     "fact",
@@ -270,13 +272,19 @@ def _wal_pragmas(con: "sqlite3.Connection") -> None:
 
 class LongTermMemory:
     """
-    Minimal dependency long-term memory:
+    Long-term memory with optional vector search:
     - SQLite with FTS5 full-text search (fallback to LIKE for short/weird queries)
+    - Optional vector DB backends: FAISS / Chroma / LanceDB
+    - Hybrid search: reciprocal rank fusion of FTS5 + vector
     - stores JSON content
     - WAL size limited to 16 MB for edge deployment
     """
 
-    def __init__(self, db_path: Path) -> None:
+    def __init__(
+        self,
+        db_path: Path,
+        vector_config: Optional[Dict[str, Any]] = None,
+    ) -> None:
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init()
@@ -287,12 +295,179 @@ class LongTermMemory:
                 con.execute("PRAGMA wal_checkpoint(PASSIVE);")
         except sqlite3.OperationalError:
             pass
+        # Vector DB integration (lazy)
+        self._vector_store = None
+        self._embedding_provider = None
+        self._hybrid_search = None
+        self._vector_config = vector_config or {}
+        if self._vector_config.get("enabled"):
+            self._init_vector()
 
     def _connect(self) -> sqlite3.Connection:
         con = sqlite3.connect(str(self.db_path))
         con.execute("PRAGMA journal_mode=WAL;")
         _wal_pragmas(con)
         return con
+
+    # ── Vector DB ─────────────────────────────────────────────────────────
+
+    def _init_vector(self) -> None:
+        cfg = self._vector_config
+        backend = cfg.get("backend", "faiss")
+        dim = cfg.get("dim", 256)
+        try:
+            if backend == "faiss":
+                from lifers.vector_db.faiss_store import FAISSStore
+                store_path = cfg.get("faiss_path", str(self.db_path.parent / "vector.faiss"))
+                self._vector_store = FAISSStore(dim=dim, store_path=store_path)
+                # Probe that faiss is actually importable
+                self._vector_store._lazy_import()
+            elif backend == "chroma":
+                from lifers.vector_db.chroma_store import ChromaStore
+                persist = cfg.get("chroma_path", str(self.db_path.parent / "chroma"))
+                self._vector_store = ChromaStore(
+                    collection_name=cfg.get("collection", "lifers_memory"),
+                    persist_path=persist,
+                )
+                self._vector_store._lazy_connect()
+            elif backend == "lancedb":
+                from lifers.vector_db.lancedb_store import LanceDBStore
+                self._vector_store = LanceDBStore(
+                    uri=cfg.get("lancedb_uri", str(self.db_path.parent / "lancedb")),
+                    table_name=cfg.get("collection", "lifers_memory"),
+                )
+                self._vector_store._lazy_connect()
+            if self._vector_store is not None:
+                from lifers.vector_db.embeddings import create_embedding_provider
+                embed_kind = cfg.get("embed_kind", "tfidf")
+                tfidf_path = cfg.get("tfidf_path")
+                try:
+                    self._embedding_provider = create_embedding_provider(
+                        kind=embed_kind,
+                        dim=dim,
+                        model_name=cfg.get("embed_model", "all-MiniLM-L6-v2"),
+                        tfidf_path=tfidf_path,
+                    )
+                except ImportError:
+                    # sentence-transformers not installed, fallback to TF-IDF
+                    self._embedding_provider = create_embedding_provider(
+                        kind="tfidf", dim=dim,
+                    )
+                # Fit TF-IDF on existing memories if needed
+                if embed_kind in ("tfidf", "tfidf_load") and tfidf_path:
+                    try:
+                        existing = self._all_documents()
+                        if existing and hasattr(self._embedding_provider, "fit_from_documents"):
+                            self._embedding_provider.fit_from_documents(existing)
+                            # Save fitted embedder
+                            self._embedding_provider.save(tfidf_path)
+                    except Exception:
+                        pass
+                from lifers.vector_db.hybrid import HybridSearch
+                self._hybrid_search = HybridSearch(
+                    vector_store=self._vector_store,
+                    embedding_provider=self._embedding_provider,
+                    fts5_search_fn=lambda q, k, types: fts5_search(
+                        str(self.db_path), q, k=k, types=types
+                    ),
+                )
+                # Backfill existing memories into vector store
+                self._backfill_vector()
+        except (ImportError, ModuleNotFoundError) as e:
+            sys.stderr.write(f"LIFERS_PROGRESS vector_init backend_not_available backend={backend} error={e}\n")
+            sys.stderr.flush()
+            self._vector_store = None
+            self._embedding_provider = None
+            self._hybrid_search = None
+
+    def _all_documents(self) -> List[dict]:
+        try:
+            with self._connect() as con:
+                rows = con.execute(
+                    "SELECT id, type, content_json, importance, source, ts_ms FROM memories"
+                ).fetchall()
+            return [
+                {
+                    "id": r[0], "type": r[1], "content": json.loads(r[2]),
+                    "importance": r[3], "source": r[4], "ts_ms": r[5],
+                }
+                for r in rows
+            ]
+        except Exception:
+            return []
+
+    def _backfill_vector(self) -> None:
+        if self._vector_store is None or self._embedding_provider is None:
+            return
+        vs_count = self._vector_store.count()
+        sql_count = self.count_all()
+        if vs_count >= sql_count:
+            return
+        try:
+            from lifers.vector_db.embeddings import _doc_content
+            missing = []
+            with self._connect() as con:
+                rows = con.execute("SELECT id, content_json FROM memories").fetchall()
+            for rid, cj in rows:
+                doc = {"id": rid, "content": json.loads(cj)}
+                content_text = _doc_content(doc)
+                if content_text.strip():
+                    missing.append((rid, content_text))
+            if missing:
+                ids, texts = zip(*missing)
+                vecs = self._embedding_provider.embed(list(texts))
+                self._vector_store.add(list(ids), vecs)
+        except Exception:
+            pass
+
+    def vector_search(self, query: str, k: int = 10) -> List[Dict[str, Any]]:
+        if self._hybrid_search is None:
+            return []
+        results = self._hybrid_search.search(query, k=k, vector_weight=1.0, fts_weight=0.0)
+        return [{"id": r.id, "score": r.score, "metadata": r.metadata} for r in results]
+
+    def hybrid_search(
+        self,
+        query: str,
+        k: int = 10,
+        vector_weight: float = 0.6,
+        fts_weight: float = 0.4,
+        types: Optional[List[MemoryType]] = None,
+    ) -> List[Dict[str, Any]]:
+        if self._hybrid_search is None:
+            return self.search(query, types=types, k=k)
+        results = self._hybrid_search.search(
+            query, k=k, vector_weight=vector_weight, fts_weight=fts_weight, types=types,
+        )
+        enriched: List[Dict[str, Any]] = []
+        for r in results:
+            item = {"id": r.id, "score": r.score, "metadata": r.metadata}
+            # Fetch full content from SQLite
+            try:
+                with self._connect() as con:
+                    row = con.execute(
+                        "SELECT type, content_json, importance, source, ts_ms FROM memories WHERE id=?",
+                        (r.id,),
+                    ).fetchone()
+                if row:
+                    item["type"] = row[0]
+                    item["content"] = json.loads(row[1])
+                    item["importance"] = row[2]
+                    item["source"] = row[3]
+                    item["ts_ms"] = row[4]
+            except Exception:
+                pass
+            enriched.append(item)
+        return enriched
+
+    def get_vector_status(self) -> Dict[str, Any]:
+        return {
+            "enabled": self._vector_config.get("enabled", False),
+            "backend": self._vector_config.get("backend", "none"),
+            "vector_count": self._vector_store.count() if self._vector_store else 0,
+            "sql_count": self.count_all(),
+            "embed_dim": self._embedding_provider.dim if self._embedding_provider else 0,
+        }
 
     def _init(self) -> None:
         with self._connect() as con:
@@ -346,7 +521,20 @@ class LongTermMemory:
                 "INSERT INTO memories(type,content_hash,content_json,content_text,importance,source,ts_ms) VALUES(?,?,?,?,?,?,?)",
                 (item.type, ch, content_json, content_text, float(item.importance), item.source, int(ts)),
             )
-            return int(cur.lastrowid)
+            row_id = int(cur.lastrowid)
+        # Also add to vector store
+        if self._vector_store is not None and self._embedding_provider is not None:
+            try:
+                from lifers.vector_db.embeddings import _doc_content
+                text = _doc_content({"content": item.content})
+                if text.strip():
+                    vec = self._embedding_provider.embed([text])
+                    self._vector_store.add([row_id], vec, [{"type": item.type, "source": item.source}])
+            except (ImportError, ModuleNotFoundError):
+                self._vector_store = None
+            except Exception:
+                pass
+        return row_id
 
     def search(self, query: str, types: Optional[List[MemoryType]] = None, k: int = 6) -> List[Dict[str, Any]]:
         q = query.strip()
@@ -401,7 +589,11 @@ class LongTermMemory:
                     tuple(ids),
                 )
         if ids:
-            # Checkpoint outside the delete transaction to avoid locked-table errors
+            if self._vector_store is not None:
+                try:
+                    self._vector_store.delete(ids)
+                except Exception:
+                    pass
             try:
                 with self._connect() as c:
                     c.execute("PRAGMA wal_checkpoint(TRUNCATE);")
@@ -424,6 +616,11 @@ class LongTermMemory:
                     tuple(ids),
                 )
         if ids:
+            if self._vector_store is not None:
+                try:
+                    self._vector_store.delete(ids)
+                except Exception:
+                    pass
             try:
                 with self._connect() as c:
                     c.execute("PRAGMA wal_checkpoint(TRUNCATE);")

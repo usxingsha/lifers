@@ -331,5 +331,110 @@
       "min_interactions_for_close_friend": 50
     },
     "note_zh": "Lifers Social 人类社交认知：9级关系深度(主人→已屏蔽)+认主+识人+依恋+社交学习+行为调节。像人类一样建立维护社交关系"
+  },
+  "auth": {
+    "enabled": true,
+    "jwt_ttl_seconds": 86400,
+    "session_ttl_hours": 24,
+    "api_key_prefix": "lf",
+    "default_role": "user",
+    "password_min_length": 8,
+    "pbkdf2_iterations": 200000,
+    "rate_limit": {
+      "max_requests_per_minute": 200,
+      "window_seconds": 60
+    },
+    "device_binding": {
+      "enabled": true,
+      "max_devices_per_user": 10,
+      "require_trusted_device_for_admin": true
+    },
+    "note_zh": "Lifers Auth 认证系统：JWT+API Key+会话+设备指纹+PBKDF2密码哈希+RBAC角色权限"
+  },
+  "tenant": {
+    "enabled": true,
+    "default_quota_disk_mb": 1024,
+    "default_quota_memory_entries": 100000,
+    "default_quota_robots": 10,
+    "default_quota_api_per_min": 100,
+    "isolation": {
+      "memory_db_per_tenant": true,
+      "sessions_per_tenant": true,
+      "models_per_tenant": true,
+      "encrypted_storage": true
+    },
+    "note_zh": "Lifers Tenant 多租户隔离：命名空间+数据分区+配额管理+租户级加密"
+  },
+  "tls": {
+    "enabled": true,
+    "min_version": "TLSv1.2",
+    "ciphers": "ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM",
+    "cert_dir": "config/certs",
+    "auto_generate_self_signed": true,
+    "hsts_max_age_seconds": 31536000,
+    "note_zh": "Lifers TLS 安全通信：HTTPS/TLS1.2++自动证书+加密存储"
+  },
+  "cluster": {
+    "enabled": false,
+    "node_id": "",
+    "bind_host": "127.0.0.1",
+    "bind_port": 55560,
+    "rpc_port_offset": 1,
+    "seed_peers": [],
+    "raft": {
+      "election_timeout_min_sec": 3.0,
+      "election_timeout_max_sec": 6.0,
+      "heartbeat_interval_sec": 0.5,
+      "rpc_timeout_sec": 2.0
+    },
+    "note_zh": "Lifers Cluster 分布式集群：Raft共识+主从选举+心跳+状态同步+脑裂防护"
+  },
+  "websocket": {
+    "enabled": true,
+    "host": "127.0.0.1",
+    "port": 55557,
+    "max_connections": 1000,
+    "ping_interval_sec": 30,
+    "note_zh": "Lifers WebSocket 双向实时通信：发布订阅+事件流+训练/机器人/告警实时推送"
+  },
+  "model_registry": {
+    "enabled": true,
+    "registry_dir": "weights/.registry",
+    "auto_register_on_train": true,
+    "keep_versions": 10,
+    "ab_testing": {
+      "enabled": true,
+      "default_canary_pct": 10
+    },
+    "note_zh": "Lifers Model Registry 模型版本管理：版本注册+A/B切换+金丝雀部署+回滚+校验和"
+  },
+  "robot_protocols": {
+    "enabled": false,
+    "protocols": {
+      "mqtt": {
+        "enabled": false,
+        "params": { "broker_host": "localhost", "broker_port": 1883 }
+      },
+      "ros2": {
+        "enabled": false,
+        "params": { "domain_id": 0 }
+      },
+      "grpc": {
+        "enabled": false,
+        "params": { "endpoint": "localhost:50051", "use_tls": false }
+      }
+    },
+    "note_zh": "Lifers Robot Protocols 机器人协议适配：MQTT5.0/ROS2 DDS/gRPC + robot_hal桥接"
+  },
+  "fleet": {
+    "enabled": false,
+    "heartbeat_timeout_sec": 30,
+    "offline_check_interval_sec": 60,
+    "max_tasks_per_robot": 50,
+    "ota": {
+      "enabled": true,
+      "staging_dir": "state/fleet/ota"
+    },
+    "note_zh": "Lifers Fleet 机器人舰队管理：发现/注册/心跳/OTA升级/任务分发/紧急停止"
   }
 }

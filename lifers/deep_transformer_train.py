@@ -39,11 +39,10 @@ from lifers.deep_transformer import (
 
 
 def _try_numpy() -> Any:
-    try:
-        import numpy as np
-        return np
-    except ImportError:
-        return None
+    """Legacy — use get_compute_backend() instead."""
+    from lifers.core.compute_backend import get_compute_backend
+    np_mod, _, _ = get_compute_backend()
+    return np_mod
 
 
 # ======================================================================
@@ -136,8 +135,9 @@ def _attention_bwd(dOut: Any, cache: dict, np: Any) -> dict:
     if cache_key in _rope_cache:
         cos, sin = _rope_cache[cache_key]
     else:
-        pos = np.arange(T, dtype=np.float64).reshape(T, 1)
-        dim_arr = np.arange(d2, dtype=np.float64).reshape(1, d2)
+        float_dtype = np.float32 if device == "cuda" else np.float64
+        pos = np.arange(T, dtype=float_dtype).reshape(T, 1)
+        dim_arr = np.arange(d2, dtype=float_dtype).reshape(1, d2)
         theta = 1.0 / (10000.0 ** (2.0 * dim_arr / head_dim))
         freqs = pos @ theta
         cos = np.cos(freqs).reshape(1, T, d2)
@@ -384,9 +384,11 @@ def train_deep_backprop(
     """
     Train DeepTransformer with full backprop through all layers and heads.
     """
-    np = _try_numpy()
-    if np is None:
-        raise ImportError("NumPy is required for deep backprop training.")
+    from lifers.core.compute_backend import get_compute_backend, get_cpu_numpy, print_backend_info
+    np, device, gpu_info = get_compute_backend()
+    cpu_np = get_cpu_numpy()
+
+    print_backend_info()
 
     rng = random.Random(seed)
 
@@ -446,8 +448,9 @@ def train_deep_backprop(
         or os.environ.get("MKL_NUM_THREADS", "").strip()
     )
     tip = f"OMP_NUM_THREADS={thr_line}" if thr_line else "export OMP_NUM_THREADS=$(nproc)"
+    dev_label = f"GPU:{gpu_info['name']}" if device == "cuda" else "CPU"
     print(f"[deep-backprop] V={V} D={d_model} F={d_ff} H={n_heads} L={n_layers} S={max_seq} "
-          f"steps={steps} — {tip}", file=sys.stderr)
+          f"steps={steps} device={dev_label} — {tip}", file=sys.stderr)
 
     def _save() -> None:
         w.tok_emb = params["tok_emb"].tolist()
@@ -462,37 +465,42 @@ def train_deep_backprop(
         w.save(out_path)
 
     def _save_adam(step_num: int) -> None:
-        """Save AdamW state for crash recovery within same tier."""
+        """Save AdamW state for crash recovery within same tier (GPU-safe I/O)."""
         adam_path = out_path.parent / "lifers_deep_adam.npz"
         d = {}
         for k in params:
-            d[f"{k}_m"] = adam_state[k]["m"]
-            d[f"{k}_v"] = adam_state[k]["v"]
-        d["_step"] = np.array([step_num], dtype=np.int64)
-        np.savez_compressed(adam_path, **d)
+            val_m = adam_state[k]["m"]
+            val_v = adam_state[k]["v"]
+            d[f"{k}_m"] = val_m if isinstance(val_m, cpu_np.ndarray) else val_m.get()
+            d[f"{k}_v"] = val_v if isinstance(val_v, cpu_np.ndarray) else val_v.get()
+        d["_step"] = cpu_np.array([step_num], dtype=cpu_np.int64)
+        cpu_np.savez_compressed(adam_path, **d)
 
     def _load_adam() -> int | None:
-        """Load AdamW state if available for this tier. Returns loaded step or None.
+        """Load AdamW state if available for this tier (GPU-safe). Returns loaded step or None.
         Returns None when shapes don't match (avoids false positive resume)."""
         adam_path = out_path.parent / "lifers_deep_adam.npz"
         if not adam_path.is_file():
             return None
         try:
-            arrs = np.load(adam_path)
+            arrs = cpu_np.load(adam_path)
             loaded_any = False
             for k in params:
                 key_m = f"{k}_m"
                 key_v = f"{k}_v"
                 if key_m in arrs and key_v in arrs:
-                    if arrs[key_m].shape == adam_state[k]["m"].shape:
-                        adam_state[k]["m"] = arrs[key_m]
-                        adam_state[k]["v"] = arrs[key_v]
+                    loaded_m = arrs[key_m]
+                    loaded_v = arrs[key_v]
+                    if loaded_m.shape == adam_state[k]["m"].shape:
+                        # Transfer to device if on GPU
+                        adam_state[k]["m"] = np.asarray(loaded_m) if device == "cuda" else loaded_m
+                        adam_state[k]["v"] = np.asarray(loaded_v) if device == "cuda" else loaded_v
                         loaded_any = True
                     else:
                         return None  # shape mismatch — don't risk corrupt state
             if not loaded_any:
                 return None
-            return int(arrs.get("_step", np.array([0]))[0])
+            return int(arrs.get("_step", cpu_np.array([0]))[0])
         except Exception:
             return None
 

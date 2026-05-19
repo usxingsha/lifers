@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-import numpy as _numpy
+import numpy as _cpu_np  # 始终 CPU NumPy，用于文件 I/O 和权重初始化
 
 
 # ---------------------------------------------------------------------------
@@ -48,8 +48,9 @@ def _rope_apply(x: Any, np: Any) -> Any:
     if cache_key in _rope_cache:
         cos, sin = _rope_cache[cache_key]
     else:
-        pos = np.arange(T, dtype=np.float64).reshape(T, 1)
-        dim = np.arange(d2, dtype=np.float64).reshape(1, d2)
+        float_dtype = np.float32 if hasattr(np, 'cuda') else np.float64
+        pos = np.arange(T, dtype=float_dtype).reshape(T, 1)
+        dim = np.arange(d2, dtype=float_dtype).reshape(1, d2)
         theta = 1.0 / (10000.0 ** (2.0 * dim / head_dim))
         freqs = pos @ theta
         cos = np.cos(freqs).reshape(1, T, d2)
@@ -110,8 +111,8 @@ class DeepTransformerWeights:
         arrays = {}
         for k in self._weight_keys:
             v = getattr(self, k)
-            arrays[k] = _numpy.array(v, dtype=_numpy.float32)
-        _numpy.savez_compressed(npz_path, **arrays)
+            arrays[k] = _cpu_np.array(v, dtype=_cpu_np.float32)
+        _cpu_np.savez_compressed(npz_path, **arrays)
         # Atomically update JSON to point to the new .npz
         meta = self._meta_dict()
         meta["_npz"] = npz_name
@@ -148,7 +149,7 @@ class DeepTransformerWeights:
             npz_path = path.parent / npz_rel
             if npz_path.is_file():
                 try:
-                    arrs = _numpy.load(npz_path)
+                    arrs = _cpu_np.load(npz_path)
                 except Exception:
                     # Corrupt .npz — clean it so we don't keep broken file
                     try:
@@ -177,7 +178,7 @@ def init_deep_weights(
     max_seq: int = 64,
     seed: int = 1,
 ) -> DeepTransformerWeights:
-    rng = _numpy.random.RandomState(seed)
+    rng = _cpu_np.random.RandomState(seed)
     V = len(vocab)
     D = d_model
     F = d_ff
@@ -219,7 +220,7 @@ _causal_mask_cache: Dict[int, Any] = {}
 
 def _causal_mask(T: int, np: Any) -> Any:
     if T not in _causal_mask_cache:
-        _causal_mask_cache[T] = np.triu(np.ones((T, T), dtype=np.float64), k=1) * (-1e9)
+        _causal_mask_cache[T] = np.triu(np.ones((T, T), dtype=np.float32), k=1) * (-1e9)
     return _causal_mask_cache[T]
 
 
@@ -398,10 +399,8 @@ def generate_text(
     repetition_penalty: >1.0 惩罚已生成 token 的重复 (默认 1.05)。
     """
     import random as _random
-    try:
-        import numpy as _np
-    except ImportError:
-        return prompt + " [numpy required]"
+    from lifers.core.compute_backend import get_compute_backend
+    _np, _, _ = get_compute_backend()
 
     rng = _random.Random(seed)
     stoi = {ch: i for i, ch in enumerate(w.vocab)}

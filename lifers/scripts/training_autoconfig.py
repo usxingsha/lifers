@@ -38,92 +38,111 @@ def load_hardware_profile(path: Optional[Path] = None) -> Dict[str, Any]:
 
 
 def get_training_config(pillar: str, hw_profile: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """根据硬件配置返回指定支柱的最优训练参数"""
+    """
+    全自适应训练配置 — 根据实时硬件探测动态计算最优参数。
+    不再使用硬编码 tier 分支，改为连续缩放。
+    """
+    # 自适应硬件探测（优先使用传入的，否则实时探测）
     if hw_profile is None:
-        hw_profile = load_hardware_profile()
+        try:
+            from lifers.core.hardware_profile import get_profile
+            hw = get_profile()
+            hw_dict = hw.to_dict()
+        except Exception:
+            hw_dict = load_hardware_profile()
+    else:
+        hw_dict = hw_profile
 
     base = dict(_DEFAULT_CONFIG.get(pillar, {}))
-    if not hw_profile:
+    if not hw_dict:
         return base
 
-    training = hw_profile.get("training", {})
-    ram = hw_profile.get("ram", {})
-    cpu = hw_profile.get("cpu", {})
-    gpu = hw_profile.get("gpu", {})
+    training = hw_dict.get("training", {})
+    ram = hw_dict.get("ram", {})
+    cpu = hw_dict.get("cpu", {})
+    gpu = hw_dict.get("gpu", {})
 
-    tier = training.get("memory_tier", "low")
-    workers = training.get("max_parallel_workers", 1)
-    batch = training.get("recommended_batch_size", 32)
-    device = training.get("preferred_device", "cpu")
-    epoch_mult = training.get("recommended_epochs_multiplier", 1.0)
-    has_cuda = gpu.get("cuda_available", False)
-    vram_mb = gpu.get("vram_mb", 0)
-    ram_mb = ram.get("total_mb", 4096)
+    # 连续缩放因子（基于实际硬件，非离散tier）
+    ram_total_mb = ram.get("total_mb", 4096)
     cores = cpu.get("cores_physical", 1)
+    gpu_ok = gpu.get("available", False) or gpu.get("cuda_available", False)
+    vram_mb = gpu.get("vram_mb", 0)
 
-    # 通用参数
-    base["max_parallel_workers"] = workers
-    base["preferred_device"] = device
-    base["memory_tier"] = tier
+    # 硬件质量因子: RAM越多、核心越多 → 因子越高
+    ram_factor = max(0.25, min(3.0, ram_total_mb / 8192))  # 8GB=1.0x
+    core_factor = max(0.25, min(3.0, cores / 4))             # 4核=1.0x
+    gpu_factor = 2.0 if (gpu_ok and vram_mb >= 4096) else (1.5 if gpu_ok else 1.0)
 
-    # 按支柱微调
+    # epoch倍率: 硬件越好 epoch 越多
+    epoch_mult = training.get("epoch_multiplier", 1.0)
+
+    # 获取自适应线程和batch
+    try:
+        from lifers.core.hardware_profile import get_profile
+        hw_live = get_profile()
+        threads = hw_live.threads_for(pillar)
+        batch = hw_live.batch_size_for(pillar)
+    except Exception:
+        threads = training.get("global_threads", cores)
+        batch = training.get("recommended_batch_size", 32)
+
+    base["max_parallel_workers"] = max(1, int(cores * 0.75))
+    base["preferred_device"] = "cuda" if gpu_ok else "cpu"
+    base["memory_tier"] = training.get("memory_tier", "medium")
+    base["optimal_threads"] = threads
+    base["batch_size"] = batch
+
+    # 动态计算每支柱参数（基于硬件因子的连续缩放）
     if pillar == "rl":
-        base["lr"] = 2e-3 if tier == "high" else 1e-3
+        base["lr"] = 1e-3 * ram_factor
         base["episodes"] = int(500 * epoch_mult)
-        base["batch_size"] = min(batch, 64)
-        base["hidden_dim"] = 256 if tier == "high" else 128
-        if has_cuda and vram_mb >= 4096:
-            base["hidden_dim"] = 512
+        base["hidden_dim"] = int(128 * ram_factor * gpu_factor)
 
     elif pillar == "voice":
-        base["lr"] = 2e-2 if tier == "high" else 1e-2
+        base["lr"] = 1e-2 * ram_factor
         base["epochs"] = int(30 * epoch_mult)
         base["n_samples"] = int(500 * epoch_mult)
-        base["hidden_dim"] = 256 if tier == "high" else 128
-        if tier == "low":
-            base["n_samples"] = 200
-            base["epochs"] = 20
+        base["hidden_dim"] = int(128 * ram_factor * gpu_factor)
 
     elif pillar == "kg":
-        base["lr"] = 2e-2 if tier == "high" else 1e-2
+        base["lr"] = 1e-2 * ram_factor
         base["epochs"] = int(50 * epoch_mult)
-        base["n_triplets"] = 200 if tier == "low" else (400 if tier == "medium" else 800)
-        base["embedding_dim"] = 128 if tier == "high" else 64
-        base["hard_negatives"] = 16 if tier == "high" else 8
+        base["n_triplets"] = int(400 * ram_factor * core_factor)
+        base["embedding_dim"] = int(64 * ram_factor * gpu_factor)
 
     elif pillar == "safety":
-        base["lr"] = 2e-2 if tier == "high" else 1e-2
-        base["epochs"] = min(int(base["epochs"] * epoch_mult), 80)
+        base["lr"] = 1e-2 * ram_factor
+        base["epochs"] = int(30 * epoch_mult)
 
     elif pillar == "perception":
-        base["lr"] = 4e-3 if tier == "high" else 2e-3
-        base["epochs"] = min(int(base["epochs"] * epoch_mult), 150)
-        base["hidden_dim"] = 128 if tier == "high" else 64
+        base["lr"] = 2e-3 * ram_factor
+        base["epochs"] = int(80 * epoch_mult)
+        base["hidden_dim"] = int(64 * ram_factor * gpu_factor)
 
     elif pillar == "social":
-        base["lr"] = 4e-3 if tier == "high" else 2e-3
-        base["epochs"] = min(int(base["epochs"] * epoch_mult), 120)
-        base["hidden_dim"] = 128 if tier == "high" else 64
+        base["lr"] = 2e-3 * ram_factor
+        base["epochs"] = int(60 * epoch_mult)
+        base["hidden_dim"] = int(64 * ram_factor * gpu_factor)
 
     elif pillar == "proactive":
-        base["lr"] = 2e-3 if tier == "high" else 1e-3
-        base["epochs"] = min(int(base["epochs"] * epoch_mult), 150)
+        base["lr"] = 1e-3 * ram_factor
+        base["epochs"] = int(80 * epoch_mult)
 
     elif pillar == "robot_hal":
-        base["lr"] = 3e-3
-        base["episodes"] = min(int(base["episodes"] * epoch_mult), 800)
-        base["hidden_dim"] = 96
+        base["lr"] = 3e-3 * ram_factor
+        base["episodes"] = int(300 * epoch_mult)
+        base["hidden_dim"] = int(96 * ram_factor)
 
     elif pillar == "swarm":
-        base["episodes"] = min(int(base["episodes"] * epoch_mult), 1200)
+        base["episodes"] = int(600 * epoch_mult)
 
     elif pillar == "simulation":
-        base["lr"] = 2e-2 if tier == "high" else 1e-2
-        base["epochs"] = min(int(base["epochs"] * epoch_mult), 120)
-        base["hidden_dim"] = 128 if tier == "high" else 64
+        base["lr"] = 1e-2 * ram_factor
+        base["epochs"] = int(60 * epoch_mult)
+        base["hidden_dim"] = int(64 * ram_factor * gpu_factor)
 
     elif pillar in ("telemetry", "dashboard"):
-        pass  # 无epochs参数
+        pass
 
     return base
 

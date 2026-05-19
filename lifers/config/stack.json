@@ -39,9 +39,7 @@
     "realtime_geo_quick": false,
     "local_lm_sampling": {
       "lifers": { "temperature": 0.8, "top_k": 80 },
-      "transformer": { "temperature": 1.1, "top_k": 80 },
-      "markov": { "temperature": 0.9, "top_k": 80 },
-      "note_zh": "Deep / TinyTransformer / Markov 采样默认；词表与网络宽度以权重 JSON（vocab、d_model 等）为准，无需单独 tokenizer 文件。deep 默认温度稍低（多层级权重质量更高）。"
+      "note_zh": "仅 Lifers Deep 采样。词表与网络宽度以权重 JSON（vocab、d_model 等）为准。"
     },
     "inference": {
       "clip_prompt_before_transformer_zh": "transformer_lm.generate_text 入口与 streaming_generator.iter_transformer_chars 在编码前调用 fix_inference_prompt，避免 ids[-max_seq:] 仅覆盖尾部导致 SYSTEM/指令丢失。",
@@ -55,9 +53,7 @@
       "note_zh": "sidecar JSON：低秩 {rank,A,B} 或 Wlm_delta；见 lifers/lora_finetune.py"
     },
     "weights": {
-      "deep": "weights/lifers_deep_transformer.json",
-      "transformer": "weights/lifers_transformer.json",
-      "markov": "weights/lifers_markov.json"
+      "lifers": "weights/lifers_deep_transformer.json"
     },
     "memory_db": "memory/longterm.sqlite3",
     "audit_log": "logs/audit.jsonl",

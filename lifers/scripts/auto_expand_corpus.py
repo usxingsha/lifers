@@ -737,6 +737,40 @@ class PlateauDetector:
 
 
 # ---------------------------------------------------------------------------
+# Inline corpus expander (called from training loop, no separate process needed)
+# ---------------------------------------------------------------------------
+
+class CorpusExpander:
+    """内联语料扩展器 — 从训练循环中直接调用，无需独立 watchdog 进程。"""
+
+    def __init__(self, root: Path, patience: int = 4, min_improvement: float = 0.02,
+                 max_additions: int = 100):
+        self.root = root
+        self.detector = PlateauDetector(patience=patience, min_improvement=min_improvement)
+        self.additions = 0
+        self.max_additions = max_additions
+
+    def check_and_expand(self, loss: float, ramp_iter: int = 0) -> bool:
+        """记录 loss，若检测到平台期则自动扩展语料。返回 True 表示已扩展。"""
+        if self.additions >= self.max_additions:
+            return False
+        if not self.detector.record(loss):
+            return False
+        domain_name, gen_func = _next_domain()
+        content = gen_func()
+        new_size = _append_corpus(self.root, content)
+        self.additions += 1
+        print(f"[corpus-expand] 平台期检测 iter={ramp_iter} loss={loss:.4f} "
+              f"→ 已添加 {domain_name} (+{len(content)}字符, 语料={new_size/1024:.0f}KB "
+              f"{self.additions}/{self.max_additions})", flush=True)
+        self.detector = PlateauDetector(
+            patience=self.detector.patience,
+            min_improvement=self.detector.min_improvement,
+        )
+        return True
+
+
+# ---------------------------------------------------------------------------
 # Main supervisor loop
 # ---------------------------------------------------------------------------
 

@@ -281,7 +281,7 @@ class LifersVoiceTrainer:
             correct += batch_correct
             n_batches += 1
 
-        accuracy = correct / len(indices) if indices else 0
+        accuracy = correct / len(indices) if len(indices) > 0 else 0
         avg_loss = total_loss / max(n_batches, 1)
         self._loss_history.append(avg_loss)
         return {"loss": avg_loss, "accuracy": accuracy}

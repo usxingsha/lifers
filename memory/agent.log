@@ -1,0 +1,10 @@
+01:02:05 [INFO] run_agent: === Lifers Agent starting ===
+01:02:05 [INFO] run_agent: SANDBOX=1  MODEL=lifers
+01:02:05 [INFO] run_agent: Stack version: 1
+01:02:05 [INFO] run_agent: OK: config\tokenizer.json
+01:02:05 [INFO] run_agent: OK: core\input_validator.py
+01:02:05 [INFO] run_agent: OK: core\inference_router.py
+01:02:05 [INFO] run_agent: OK: core\output_formatter.py
+01:02:05 [INFO] run_agent: OK: core\npc\npc_manager.py
+01:02:05 [INFO] core.npc.persona: Loaded persona: Aria
+01:02:05 [INFO] agent_bridge: Bridge running on http://127.0.0.1:55555

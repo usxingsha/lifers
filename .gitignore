@@ -37,9 +37,13 @@ __pycache__/
 /lifers/.lifers/
 
 # 运行期日志与本地记忆库（勿入库）
+/logs/
 /lifers/logs/
 /lifers/memory/*.sqlite3
 /memory/*.sqlite3
+
+# 运行期状态文件（勿入库）
+/state/
 
 # 本地 data/（Cursor 状态、扩展缓存、用户数据等）不进入版本库
 /data/

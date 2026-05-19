@@ -469,10 +469,7 @@ def cmd_weights(args: list) -> int:
     sub = args[1].lower() if len(args) > 1 else "list"
 
     if sub == "list" or sub == "ls":
-        # 正确路径: 外层 weights/ = 项目根/weights, 内层 = lifers包/weights
-        PROJECT_ROOT = LIFERS_ROOT.parent if LIFERS_ROOT.name == "lifers" else LIFERS_ROOT
         weight_dirs = [
-            (PROJECT_ROOT / "weights", "weights/"),
             (LIFERS_ROOT / "weights", "lifers/weights/"),
         ]
         all_files = []
@@ -513,16 +510,14 @@ def cmd_weights(args: list) -> int:
 
     if sub == "info" and len(args) > 2:
         fname = args[2]
-        PROJECT_ROOT = LIFERS_ROOT.parent if LIFERS_ROOT.name == "lifers" else LIFERS_ROOT
         found = None
-        for wdir in [PROJECT_ROOT / "weights", LIFERS_ROOT / "weights"]:
-            cand = wdir / fname
+        for cand in [(LIFERS_ROOT / "weights" / fname)]:
             if cand.is_file():
                 found = cand
                 break
         if not found:
             # 支持部分名称匹配
-            for wdir in [LIFERS_ROOT / "weights", LIFERS_ROOT / "lifers" / "weights"]:
+            for wdir in [LIFERS_ROOT / "weights"]:
                 for f in wdir.glob(f"*{fname}*"):
                     found = f
                     break
@@ -624,9 +619,8 @@ def cmd_training(args: list) -> int:
             console.print("[bold]Windows 训练状态:[/bold]")
         else:
             print("=== Windows 训练状态 ===")
-        PROJECT_ROOT = LIFERS_ROOT.parent if LIFERS_ROOT.name == "lifers" else LIFERS_ROOT
         # Windows
-        for wdir in [LIFERS_ROOT / "weights", PROJECT_ROOT / "weights"]:
+        for wdir in [LIFERS_ROOT / "weights"]:
             sf = wdir / ".train_status.json"
             if sf.is_file():
                 try:
@@ -673,9 +667,7 @@ def cmd_training(args: list) -> int:
             console.print("[bold]训练语料统计:[/bold]")
         else:
             print("=== 训练语料统计 ===")
-        PROJECT_ROOT = LIFERS_ROOT.parent if LIFERS_ROOT.name == "lifers" else LIFERS_ROOT
         corpus_paths = [
-            PROJECT_ROOT / "weights" / "training_corpus.txt",
             LIFERS_ROOT / "weights" / "training_corpus.txt",
         ]
         for cp in corpus_paths:
@@ -703,11 +695,11 @@ def cmd_training(args: list) -> int:
             console.print("[bold]训练材料文件:[/bold]")
         else:
             print("=== 训练材料文件 ===")
-        PROJECT_ROOT = LIFERS_ROOT.parent if LIFERS_ROOT.name == "lifers" else LIFERS_ROOT
-        # 语料生成脚本（在项目根目录）
-        gen_scripts = sorted(PROJECT_ROOT.glob("gen_*.py")) + sorted(PROJECT_ROOT.glob("build_*.py"))
-        scrape_scripts = sorted(PROJECT_ROOT.glob("scrape_*.py"))
-        expand_scripts = sorted(PROJECT_ROOT.glob("expand_*.py"))
+        # 语料生成脚本（在 lifers/scripts/ 下）
+        scripts_dir = LIFERS_ROOT / "scripts"
+        gen_scripts = sorted(scripts_dir.glob("gen_*.py")) + sorted(scripts_dir.glob("build_*.py"))
+        scrape_scripts = sorted(scripts_dir.glob("scrape_*.py"))
+        expand_scripts = sorted(scripts_dir.glob("expand_*.py"))
         all_gen = gen_scripts + scrape_scripts + expand_scripts
         print(f"\n语料生成脚本 ({len(all_gen)}):")
         for s in all_gen:
@@ -719,8 +711,8 @@ def cmd_training(args: list) -> int:
         for s in train_scripts:
             print(f"  {s.name} ({s.stat().st_size/1024:.0f}KB)")
 
-        # 数据目录（项目根下）
-        data_dir = PROJECT_ROOT / "data"
+        # 数据目录
+        data_dir = LIFERS_ROOT / "data"
         if data_dir.is_dir():
             total = sum(f.stat().st_size for f in data_dir.rglob("*") if f.is_file())
             files = len(list(data_dir.rglob("*")))
@@ -756,8 +748,7 @@ def cmd_sync(args: list) -> int:
             except (ValueError, IndexError):
                 interval = 120
 
-    PROJECT_ROOT = LIFERS_ROOT.parent if LIFERS_ROOT.name == "lifers" else LIFERS_ROOT
-    weights_dir = PROJECT_ROOT / "weights"
+    weights_dir = LIFERS_ROOT / "weights"
     weights_dir.mkdir(parents=True, exist_ok=True)
 
     def _do_sync():
@@ -874,10 +865,8 @@ def cmd_control(args: list) -> int:
 
     cmd_map = {"pause": "pause", "resume": "run", "stop": "stop"}
 
-    PROJECT_ROOT = LIFERS_ROOT.parent if LIFERS_ROOT.name == "lifers" else LIFERS_ROOT
-
     def _local_control(action: str):
-        ctl_file = PROJECT_ROOT / "weights" / ".train_control"
+        ctl_file = LIFERS_ROOT / "weights" / ".train_control"
         ctl_file.parent.mkdir(parents=True, exist_ok=True)
         old = ctl_file.read_text().strip() if ctl_file.is_file() else "(none)"
         ctl_file.write_text(f"{action}\n")
@@ -893,7 +882,7 @@ def cmd_control(args: list) -> int:
         _wprint(f"  Kali: {out}")
 
     def _local_status():
-        for wdir in [PROJECT_ROOT / "weights", LIFERS_ROOT / "weights"]:
+        for wdir in [LIFERS_ROOT / "weights"]:
             ctl = wdir / ".train_control"
             if ctl.is_file():
                 print(f"  本地控制: {ctl.read_text().strip()}  ({ctl})")

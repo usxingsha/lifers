@@ -14,7 +14,8 @@ import json, logging, os, sys, time
 from pathlib import Path
 
 # ── Path bootstrap ────────────────────────────────────────────────────────────
-ROOT = Path(__file__).parent.parent
+ROOT = Path(__file__).parent.parent              # lifers/ 包根
+PROJECT_ROOT = ROOT.parent                        # 项目根
 sys.path.insert(0, str(ROOT))
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
@@ -24,14 +25,14 @@ logging.basicConfig(
     datefmt = "%H:%M:%S",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler(ROOT / "memory" / "agent.log", encoding="utf-8"),
+        logging.FileHandler(PROJECT_ROOT / "memory" / "agent.log", encoding="utf-8"),
     ],
 )
 log = logging.getLogger("run_agent")
 
 
 def load_stack() -> dict:
-    path = ROOT / "config" / "stack.json"
+    path = PROJECT_ROOT / "config" / "stack.json"
     if not path.exists():
         log.error("stack.json not found at %s", path)
         sys.exit(1)

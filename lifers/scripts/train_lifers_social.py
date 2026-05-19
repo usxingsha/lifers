@@ -1,87 +1,74 @@
 """
-Lifers Perception v2 — 6类场景分类器 (n-gram特征 + 3层MLP + Adam)
-品牌化权重: weights/lifers_perception_classifier.json
+Lifers Social v2 — 6类社交意图分类器 (n-gram特征 + 3层MLP + Adam)
+品牌化权重: weights/lifers_social_classifier.json
 """
 
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
 from collections import Counter
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Tuple, Optional
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 N_CLASSES = 6
-CLASS_NAMES = ["室内办公", "室内家庭", "室内公共", "户外街道", "户外自然", "户外运动"]
+CLASS_NAMES = ["问候", "协作", "情感支持", "信息分享", "提醒催促", "社交协调"]
 
 
-# 每类场景的高区分度关键词（必须出现在特征词表中）
-PERCEPTION_KEYWORDS = [
-    # 室内办公
-    "办公桌", "键盘声", "打印机", "会议室", "工位", "白板", "投影", "邮件", "汇报", "打卡",
-    # 室内家庭
-    "沙发", "卧室", "厨房", "饭菜", "洗衣", "阳台", "拖鞋", "窗帘", "冰箱", "洗澡",
-    # 室内公共
-    "收银台", "货架", "购物车", "电梯", "挂号", "排队", "试衣间", "菜单", "阅览室", "展厅",
-    # 户外街道
-    "马路", "红绿灯", "斑马线", "公交站", "人行道", "鸣笛", "路灯", "交警", "堵车", "停车位",
-    # 户外自然
-    "鸟鸣", "溪流", "森林", "海边", "沙滩", "山峰", "花草", "瀑布", "星空", "露珠",
-    # 户外运动
-    "操场", "球场", "篮球", "足球", "跑步", "游泳", "哨声", "教练", "健身", "热身",
-]
-
-
-def _extract_ngrams(texts: List[str], max_features: int = 512) -> Dict[str, int]:
+def _extract_ngrams(texts: List[str], max_features: int = 256) -> Dict[str, int]:
+    """从文本列表中提取高频n-gram特征"""
     counter = Counter()
     for t in texts:
+        # 字符级 bigram + trigram
         for i in range(len(t) - 1):
             counter[t[i:i+2]] += 1
         for i in range(len(t) - 2):
             counter[t[i:i+3]] += 1
-    kw_count = len(PERCEPTION_KEYWORDS)
-    ngram_slots = max(0, max_features - kw_count)
-    # 强制保留所有感知关键词（索引 0..kw_count-1）
-    vocab: Dict[str, int] = {}
-    for i, w in enumerate(PERCEPTION_KEYWORDS):
-        vocab[w] = i
-    # n-gram 特征索引从 kw_count 开始
-    for i, (k, _) in enumerate(counter.most_common(ngram_slots)):
-        if k not in vocab:  # 避免关键词重复
-            vocab[k] = kw_count + i
-    return vocab
+        # 词级关键词 (中文按字切分)
+        for w in ["一起", "帮", "合作", "理解", "发现", "分享", "记得", "任务",
+                  "联系", "协调", "邀请", "团队", "同步", "早安", "抱歉", "感谢",
+                  "提醒", "会议", "进展", "建议", "报告", "通知", "检查", "更新"]:
+            if w in t:
+                counter[f"W:{w}"] += 1
+    return {k: i for i, (k, _) in enumerate(counter.most_common(max_features))}
 
 
 def _text_features(texts: List[str], vocab: Dict[str, int], n_features: int) -> np.ndarray:
+    """文本 → n-gram特征矩阵"""
     X = np.zeros((len(texts), n_features), dtype=np.float32)
-    kw_count = len(PERCEPTION_KEYWORDS)
     for i, t in enumerate(texts):
-        # 关键词特征（高权重二值）
-        for j, w in enumerate(PERCEPTION_KEYWORDS):
-            if w in t:
-                X[i, j] = 3.0
-        # n-gram 特征
         for j in range(len(t) - 1):
             idx = vocab.get(t[j:j+2], -1)
-            if 0 <= idx < n_features and idx >= kw_count:
+            if idx >= 0:
                 X[i, idx] += 1.0
         for j in range(len(t) - 2):
             idx = vocab.get(t[j:j+3], -1)
-            if 0 <= idx < n_features and idx >= kw_count:
+            if idx >= 0:
                 X[i, idx] += 1.0
-    # 仅对 n-gram 部分做 L2 归一化
-    ngram_part = X[:, kw_count:]
-    norms = np.linalg.norm(ngram_part, axis=1, keepdims=True) + 1e-8
-    X[:, kw_count:] = ngram_part / norms
+        for w in ["一起", "帮", "合作", "理解", "发现", "分享", "记得", "任务",
+                  "联系", "协调", "邀请", "团队", "同步", "早安", "抱歉", "感谢",
+                  "提醒", "会议", "进展", "建议", "报告", "通知", "检查", "更新"]:
+            if w in t:
+                idx = vocab.get(f"W:{w}", -1)
+                if idx >= 0:
+                    X[i, idx] += 1.0
+        # 统计特征
+        X[i, idx + 1] if idx + 1 < n_features else None
+    # 归一化
+    norms = np.linalg.norm(X, axis=1, keepdims=True) + 1e-8
+    X = X / norms
     return X
 
 
-class PerceptionClassifier:
-    def __init__(self, n_features=512, hidden1=256, hidden2=128, n_classes=N_CLASSES):
+class SocialClassifier:
+    """3层MLP: n_feat→128→64→6"""
+
+    def __init__(self, n_features=256, hidden1=128, hidden2=64, n_classes=N_CLASSES):
         self.n_features = n_features
         self.hidden1 = hidden1
         self.hidden2 = hidden2
@@ -109,20 +96,22 @@ def _adam_update(param, grad, m, v, t, lr=1e-3, beta1=0.9, beta2=0.999):
     v = beta2 * v + (1 - beta2) * grad ** 2
     m_hat = m / (1 - beta1 ** t)
     v_hat = v / (1 - beta2 ** t)
-    return param - lr * m_hat / (np.sqrt(v_hat) + 1e-8), m, v
+    param -= lr * m_hat / (np.sqrt(v_hat) + 1e-8)
+    return param, m, v
 
 
-def train_perception_classifier(
-    n_epochs: int = 120, lr: float = 1e-3,
+def train_social_classifier(
+    n_epochs: int = 60, lr: float = 1e-3,
     save_path: Optional[Path] = None, verbose: bool = True,
-    max_samples: int = 200000,
-) -> PerceptionClassifier:
+    max_samples: int = 50000,
+) -> SocialClassifier:
     if save_path is None:
-        save_path = ROOT / "weights" / "lifers_perception_classifier.json"
+        save_path = ROOT / "weights" / "lifers_social_classifier.json"
 
+    # 加载JSONL数据
     data_dir = ROOT / "data"
     texts, labels = [], []
-    jsonl_path = data_dir / "perception_samples.jsonl"
+    jsonl_path = data_dir / "social_samples.jsonl"
     if jsonl_path.exists():
         with open(jsonl_path, encoding="utf-8") as f:
             for i, line in enumerate(f):
@@ -137,11 +126,11 @@ def train_perception_classifier(
 
     if len(texts) < 100:
         if verbose:
-            print("[Lifers-Perception v2] 数据不足，使用内置样本")
-        return _train_perception_fallback(n_epochs, lr, save_path, verbose)
+            print("[Lifers-Social v2] 数据不足，使用内置样本")
+        return _train_fallback(n_epochs, lr, save_path, verbose)
 
     if verbose:
-        print(f"[Lifers-Perception v2] 数据: {len(texts):,} 样本")
+        print(f"[Lifers-Social v2] 数据: {len(texts):,} 样本")
 
     # 构建n-gram词表
     vocab = _extract_ngrams(texts, max_features=256)
@@ -155,9 +144,11 @@ def train_perception_classifier(
     X_train, y_train = X[idx[:n_train]], y[idx[:n_train]]
     X_val, y_val = X[idx[n_train:]], y[idx[n_train:]]
 
-    model = PerceptionClassifier(n_features=n_feat)
+    model = SocialClassifier(n_features=n_feat)
     batch_size = 128
     best_acc = 0.0
+
+    # Adam状态
     t = 0
     mW1 = np.zeros_like(model.W1); vW1 = np.zeros_like(model.W1)
     mb1 = np.zeros_like(model.b1); vb1 = np.zeros_like(model.b1)
@@ -181,6 +172,7 @@ def train_perception_classifier(
             h2 = np.maximum(0, h2_pre)
             logits = h2 @ model.W3 + model.b3
 
+            # Softmax + CrossEntropy
             logits_max = np.max(logits, axis=1, keepdims=True)
             exp_logits = np.exp(logits - logits_max)
             probs = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
@@ -214,45 +206,40 @@ def train_perception_classifier(
         val_acc = np.mean(val_preds == y_val)
         if val_acc > best_acc:
             best_acc = val_acc
-            _save_perception_model(model, vocab, save_path)
+            _save_social_model(model, vocab, save_path)
 
         if (epoch + 1) % 15 == 0 and verbose:
-            print(f"[Lifers-Perception v2] epoch {epoch + 1}/{n_epochs}  "
+            print(f"[Lifers-Social v2] epoch {epoch + 1}/{n_epochs}  "
                   f"loss={total_loss/(n_train//batch_size+1):.4f}  val_acc={val_acc:.3f}")
 
         if val_acc > 0.97 and epoch > 10:
             if verbose:
-                print(f"[Lifers-Perception v2] 早停 epoch {epoch+1} val_acc={val_acc:.3f}")
+                print(f"[Lifers-Social v2] 早停 epoch {epoch+1} val_acc={val_acc:.3f}")
             break
 
-    _save_perception_model(model, vocab, save_path)
+    _save_social_model(model, vocab, save_path)
     if verbose:
-        print(f"[Lifers-Perception v2] 完成 best_val_acc={best_acc:.3f} → {save_path}")
+        print(f"[Lifers-Social v2] 完成 best_val_acc={best_acc:.3f} → {save_path}")
     return model
 
 
-_PERCEPTION_SAMPLES = [
-    # 室内办公 (0)
-    ("办公室里键盘声不断有人在敲代码", 0), ("会议室里白板上写满了方案", 0), ("工位上电脑屏幕亮着", 0),
-    ("打印机正在输出文件", 0), ("茶水间里有人在休息聊天", 0),
-    # 室内家庭 (1)
-    ("客厅阳光透过窗帘照进来", 1), ("厨房里飘出饭菜的香味", 1), ("卧室里灯光柔和温暖", 1),
-    ("阳台上植物长势很好", 1), ("书房里书架上摆满了书", 1),
-    # 室内公共 (2)
-    ("商场里人来人往热闹非凡", 2), ("图书馆安静得能听到翻书声", 2), ("咖啡厅里有人在用电脑工作", 2),
-    ("医院走廊里护士在巡视", 2), ("超市里顾客在挑选商品", 2),
-    # 户外街道 (3)
-    ("街道上车辆川流不息", 3), ("路口红绿灯交替变换", 3), ("人行道上行人匆匆走过", 3),
-    ("路边商铺的招牌亮着灯", 3), ("公交站台有人在等车", 3),
-    # 户外自然 (4)
-    ("公园里鸟语花香阳光明媚", 4), ("海边浪花拍打着沙滩", 4), ("森林里树木茂密空气清新", 4),
-    ("山间小溪流水潺潺", 4), ("田野上金黄的麦浪随风起伏", 4),
-    # 户外运动 (5)
-    ("操场上人们正在跑步锻炼", 5), ("球场上比赛进行得很激烈", 5), ("健身房里器械声此起彼伏", 5),
-    ("游泳池里水花四溅", 5), ("跑道上运动员在冲刺", 5),
+# 内置6类社交意图样本 (text, label) — label对应 CLASS_NAMES
+_SOCIAL_SAMPLES = [
+    ("主人早上好", 0), ("嗨Lifers", 0), ("你好", 0), ("早安", 0), ("下午好", 0),
+    ("帮我看看这个代码", 1), ("一起完成这个任务", 1), ("协助我处理下数据", 1),
+    ("配合我做下分析", 1), ("帮我分析一下", 1),
+    ("最近好累啊", 2), ("心情不太好", 2), ("我需要安慰", 2), ("听我说说心事", 2),
+    ("和你聊聊我的感受", 2), ("好难过", 2),
+    ("分享一下最近的新闻", 3), ("看看这个有趣的发现", 3), ("告诉你一个好消息", 3),
+    ("我发现了一个技巧", 3), ("整理些资料给我", 3),
+    ("记得提醒我开会", 4), ("别忘了提交报告", 4), ("帮忙催下进度", 4),
+    ("检查下任务列表", 4), ("提醒我下午有约会", 4),
+    ("晚上一起吃饭吧", 5), ("周末有什么计划", 5), ("约个时间讨论", 5),
+    ("我们一起去健身", 5), ("团队活动安排好了吗", 5),
 ]
 
-def _perception_feature(text: str) -> np.ndarray:
+def _social_feature(text: str) -> np.ndarray:
+    """简单特征：字符bigram计数 + 关键词匹配 (256维)"""
     feats = np.zeros(256, dtype=np.float32)
     for i in range(len(text) - 1):
         idx = hash(text[i:i+2]) % 256
@@ -260,12 +247,12 @@ def _perception_feature(text: str) -> np.ndarray:
     norm = np.linalg.norm(feats) + 1e-8
     return feats / norm
 
-def _train_perception_fallback(n_epochs, lr, save_path, verbose):
-    """使用内置数据训练感知分类器"""
-    samples = list(_PERCEPTION_SAMPLES)
-    X = np.array([_perception_feature(t) for t, _ in samples], dtype=np.float32)
+def _train_fallback(n_epochs, lr, save_path, verbose):
+    """使用内置数据作为回退"""
+    samples = list(_SOCIAL_SAMPLES)
+    X = np.array([_social_feature(t) for t, _ in samples], dtype=np.float32)
     y = np.array([l for _, l in samples], dtype=np.int32)
-    model = PerceptionClassifier(n_features=256)
+    model = SocialClassifier(n_features=256)
     rng = np.random.RandomState(123)
     best_acc = 0.0
     for epoch in range(n_epochs):
@@ -293,26 +280,26 @@ def _train_perception_fallback(n_epochs, lr, save_path, verbose):
         acc = correct / len(indices)
         if acc > best_acc:
             best_acc = acc
-            _save_perception_model(model, {}, save_path)
         if (epoch + 1) % 15 == 0 and verbose:
-            print(f"[Lifers-Perception v2] fallback epoch {epoch + 1}/{n_epochs} acc={acc:.3f}")
-    _save_perception_model(model, {}, save_path)
+            print(f"[Lifers-Social v2] fallback epoch {epoch + 1}/{n_epochs} acc={acc:.3f}")
+    _save_social_model(model, {}, save_path)
     if verbose:
-        print(f"[Lifers-Perception v2] fallback best_acc={best_acc:.3f}")
+        print(f"[Lifers-Social v2] fallback best_acc={best_acc:.3f}")
+    if verbose:
+        print(f"[Lifers-Social v2] fallback best_acc={best_acc:.3f}")
     return model
 
 
-def _save_perception_model(model: PerceptionClassifier, vocab: dict, path: Path):
+def _save_social_model(model, vocab, path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     data = {
-        "brand": "Lifers Perception Classifier v2",
-        "version": 3,
+        "brand": "Lifers Social Classifier v2",
+        "version": 2,
         "n_features": model.n_features,
         "hidden1": model.hidden1,
         "hidden2": model.hidden2,
         "n_classes": model.n_classes,
         "classes": CLASS_NAMES,
-        "_vocab": dict(sorted(vocab.items(), key=lambda x: x[1])),
         "W1": model.W1.tolist(), "b1": model.b1.tolist(),
         "W2": model.W2.tolist(), "b2": model.b2.tolist(),
         "W3": model.W3.tolist(), "b3": model.b3.tolist(),
@@ -322,12 +309,12 @@ def _save_perception_model(model: PerceptionClassifier, vocab: dict, path: Path)
 
 
 def main():
-    epochs = int(os.environ.get("LIFERS_PERCEPTION_EPOCHS", "80"))
-    out = ROOT / "weights" / "lifers_perception_classifier.json"
-    print("[Lifers-Perception v2] n-gram + 3层MLP + Adam")
+    epochs = int(os.environ.get("LIFERS_SOCIAL_EPOCHS", "60"))
+    out = ROOT / "weights" / "lifers_social_classifier.json"
+    print("[Lifers-Social v2] n-gram + 3层MLP + Adam")
     t0 = time.time()
-    train_perception_classifier(n_epochs=epochs, save_path=out, verbose=True)
-    print(f"[Lifers-Perception v2] 耗时={time.time() - t0:.1f}s")
+    train_social_classifier(n_epochs=epochs, save_path=out, verbose=True)
+    print(f"[Lifers-Social v2] 耗时={time.time() - t0:.1f}s")
 
 
 if __name__ == "__main__":

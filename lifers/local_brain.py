@@ -326,6 +326,7 @@ class LocalBrain:
             w, prompt,
             max_new_tokens=max_tokens,
             temperature=d_temp,
+            top_k=d_top,
             seed=random.randint(0, 2**31 - 1),
         ).strip()
         log_inference("lifers_generate_end", reply_chars=len(out))
@@ -336,67 +337,20 @@ class LocalBrain:
         mc = speed_local_lm_max_chars(int(getattr(self.cfg, "local_lm_max_chars", 200) or 200))
         if max_out_chars is not None:
             mc = max(32, min(mc, int(max_out_chars)))
-        if not wp.exists():
-            # Graceful degradation: try lower-capability backends
-            fb_order = ("transformer", "markov") if self.model == "lifers" else (
-                ("markov",) if self.model == "transformer" else ()
-            )
-            for fb_model in fb_order:
-                fallback = default_weight_paths(fb_model)
-                for rel in fallback:
-                    cand = (self.cfg.root_dir / rel).resolve()
-                    if cand.is_file():
-                        sys.stderr.write(f"LIFERS_PROGRESS {self.model} weights missing — falling back to {fb_model}\n")
-                        sys.stderr.flush()
-                        self.model = fb_model
-                        if fb_model == "transformer":
-                            return self._generate_transformer(prompt, mc)
-                        return self._generate_markov(prompt, mc)
+        if not wp.is_file():
             return (
-                f"（未找到权重文件。请运行训练流程或将权重放置于 `weights/` 目录。）\n"
+                f"（未找到 Lifers Deep 权重文件。请运行训练流程或将权重放置于 `weights/` 目录。）\n"
                 f"期望路径：`{wp}`"
             )
 
-        if self.model == "markov":
-            return self._generate_markov(prompt, mc)
-        if self.model == "lifers":
-            try:
-                return self._generate_deep(prompt, mc)
-            except Exception as exc:
-                log_inference("lifers_generate_error", error=str(exc)[:200])
-                # Fallback: try transformer or markov
-                for fb_model in ("transformer", "markov"):
-                    fb_paths = default_weight_paths(fb_model)
-                    for rel in fb_paths:
-                        cand = (self.cfg.root_dir / rel).resolve()
-                        if cand.is_file():
-                            sys.stderr.write(f"LIFERS_PROGRESS lifers failed ({exc}) — falling back to {fb_model}\n")
-                            sys.stderr.flush()
-                            self.model = fb_model
-                            if fb_model == "transformer":
-                                return self._generate_transformer(prompt, mc)
-                            return self._generate_markov(prompt, mc)
-                return (
-                    f"（Deep Transformer 生成失败：{exc}。且无备用权重。）\n"
-                    f"建议：检查权重文件是否完整，或重新训练。"
-                )
-        # transformer path with fallback
         try:
-            return self._generate_transformer(prompt, mc)
+            return self._generate_deep(prompt, mc)
         except Exception as exc:
-            log_inference("transformer_generate_error", error=str(exc)[:200])
-            # Fallback: if transformer fails, try lifers or markov
-            for fb_model in ("lifers", "markov"):
-                fb_paths = default_weight_paths(fb_model)
-                for rel in fb_paths:
-                    cand = (self.cfg.root_dir / rel).resolve()
-                    if cand.is_file():
-                        sys.stderr.write(f"LIFERS_PROGRESS transformer failed ({exc}) — falling back to {fb_model}\n")
-                        sys.stderr.flush()
-                        self.model = fb_model
-                        if fb_model == "lifers":
-                            return self._generate_deep(prompt, mc)
-                        return self._generate_markov(prompt, mc)
+            log_inference("lifers_generate_error", error=str(exc)[:200])
+            return (
+                f"（Lifers Deep 生成失败：{exc}。）\n"
+                f"建议：检查权重文件是否完整，或重新训练。"
+            )
             return (
                 f"（Transformer 生成失败：{exc}。且无备用权重。）\n"
                 f"建议：检查权重文件是否完整，或重新训练。"

@@ -2,10 +2,10 @@
 Deep Transformer escalate ramp — build depth and width gradually.
 
 Architecture ramp (configurable via env):
-  LIFERS_DEEP_MIN_LAYERS (default 2)  → LIFERS_DEEP_MAX_LAYERS (default 10)
-  LIFERS_DEEP_MIN_HEADS  (default 4)  → LIFERS_DEEP_MAX_HEADS  (default 8)
-  d_model: 96 → 2048   d_ff: max(256, d_model*4)  → capped at 8192
-  vocab: 128 → 4096    seq: 64 → 256   steps: proportional to params
+  LIFERS_DEEP_MIN_LAYERS (default 10)  → LIFERS_DEEP_MAX_LAYERS (default 16)
+  LIFERS_DEEP_MIN_HEADS  (default 8)   → LIFERS_DEEP_MAX_HEADS  (default 8)
+  d_model: 256 → 4096  d_ff: max(1024, d_model*4) → capped at 16384
+  vocab: 512 → 8192    seq: 128 → 512   steps: proportional to params
 
 With weight sharing (ALBERT-style), parameter count stays roughly the same
 regardless of layer count — only activations consume more RAM.
@@ -61,14 +61,14 @@ def _snap_d_model(raw: int, n_heads: int) -> int:
 
 def _read_deep_env() -> tuple:
     """Return (d_model, d_ff, max_vocab, max_seq, steps, n_layers, n_heads)."""
-    n_heads = int(os.environ.get("LIFERS_DEEP_MIN_HEADS", "4"))
-    d_model_raw = int(os.environ.get("LIFERS_DEEP_D_START", "96"))
+    n_heads = int(os.environ.get("LIFERS_DEEP_MIN_HEADS", "8"))
+    d_model_raw = int(os.environ.get("LIFERS_DEEP_D_START", "256"))
     d_model = _snap_d_model(d_model_raw, n_heads)
-    d_ff = int(os.environ.get("LIFERS_DEEP_FF_START", str(max(256, d_model * 4))))
-    max_vocab = int(os.environ.get("LIFERS_DEEP_V_START", "128"))
-    max_seq = int(os.environ.get("LIFERS_DEEP_S_START", "64"))
-    steps = int(os.environ.get("LIFERS_DEEP_STEPS_START", "200"))
-    n_layers = int(os.environ.get("LIFERS_DEEP_MIN_LAYERS", "2"))
+    d_ff = int(os.environ.get("LIFERS_DEEP_FF_START", str(max(1024, d_model * 4))))
+    max_vocab = int(os.environ.get("LIFERS_DEEP_V_START", "512"))
+    max_seq = int(os.environ.get("LIFERS_DEEP_S_START", "128"))
+    steps = int(os.environ.get("LIFERS_DEEP_STEPS_START", "300"))
+    n_layers = int(os.environ.get("LIFERS_DEEP_MIN_LAYERS", "10"))
     return d_model, d_ff, max_vocab, max_seq, steps, n_layers, n_heads
 
 
@@ -80,13 +80,13 @@ def _grow_tier_params(it: int, max_vocab: int, d_model: int, d_ff: int,
     max_heads = int(os.environ.get("LIFERS_DEEP_MAX_HEADS", "8"))
     if it > 0 and (it + 1) % 5 == 0 and n_heads < max_heads:
         n_heads += 2
-    d_model = _snap_d_model(int(min(2048, max(d_model + 8, int(d_model * grow)))), n_heads)
-    d_ff = int(min(8192, max(d_ff, int(d_model * 4))))
-    max_vocab = int(min(4096, max_vocab + 64))
-    max_seq = int(min(256, max_seq + 8))
-    steps = int(min(12000, int(steps * 1.05)))
-    max_layers = int(os.environ.get("LIFERS_DEEP_MAX_LAYERS", "10"))
-    if it > 0 and (it + 1) % 4 == 0 and n_layers < max_layers:
+    d_model = _snap_d_model(int(min(4096, max(d_model + 16, int(d_model * grow)))), n_heads)
+    d_ff = int(min(16384, max(d_ff, int(d_model * 4))))
+    max_vocab = int(min(8192, max_vocab + 128))
+    max_seq = int(min(512, max_seq + 16))
+    steps = int(min(20000, int(steps * 1.05)))
+    max_layers = int(os.environ.get("LIFERS_DEEP_MAX_LAYERS", "16"))
+    if it > 0 and (it + 1) % 3 == 0 and n_layers < max_layers:
         n_layers += 1
     return max_vocab, d_model, d_ff, max_seq, steps, n_layers, n_heads
 
@@ -142,7 +142,7 @@ def _rough_est(max_vocab: int, d_model: int, d_ff: int, n_layers: int) -> float:
     """Rough float count for deep transformer (with weight sharing)."""
     v, d, f, n = float(max_vocab), float(d_model), float(d_ff), float(n_layers)
     tok_emb = v * d
-    pos_emb = 256.0 * d  # max_seq upper bound
+    pos_emb = 512.0 * d  # max_seq upper bound
     # Per-block (shared across layers): 4 attention projections + 2 FFN
     attn = 4.0 * d * d
     ffn = 2.0 * d * f

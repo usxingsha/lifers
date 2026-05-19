@@ -359,14 +359,44 @@ def decode(ids: List[int], itos: Dict[int, str]) -> str:
     return "".join(itos.get(i, "?") for i in ids)
 
 
+def _topk_sample_token_id(last_logits, rng, temperature: float, top_k: int) -> int:
+    """温度 + top-k 采样一步，消除低概率噪声 token。"""
+    if hasattr(last_logits, "tolist"):
+        scaled = [x / max(1e-6, temperature) for x in last_logits.tolist()]
+    else:
+        scaled = [x / max(1e-6, temperature) for x in last_logits]
+    idxs = sorted(range(len(scaled)), key=lambda i: scaled[i], reverse=True)[:max(1, min(top_k, len(scaled)))]
+    vals = [scaled[i] for i in idxs]
+    import math
+    max_val = max(vals)
+    exps = [math.exp(v - max_val) for v in vals]
+    total = sum(exps)
+    probs = [e / total for e in exps]
+    r = rng.random()
+    acc = 0.0
+    pick = idxs[-1]
+    for i, p in zip(idxs, probs):
+        acc += p
+        if acc >= r:
+            pick = i
+            break
+    return pick
+
+
 def generate_text(
     w: DeepTransformerWeights,
     prompt: str,
     max_new_tokens: int = 50,
     temperature: float = 0.8,
+    top_k: int = 80,
+    repetition_penalty: float = 1.05,
     seed: int = 42,
 ) -> str:
-    """Autoregressive generation using NumPy forward pass."""
+    """Autoregressive generation using NumPy forward pass.
+
+    top_k: 采样截断数 (默认 80)，过滤低概率噪声 token。
+    repetition_penalty: >1.0 惩罚已生成 token 的重复 (默认 1.05)。
+    """
     import random as _random
     try:
         import numpy as _np
@@ -390,19 +420,28 @@ def generate_text(
     W2 = _np.asarray(w.W2, dtype=_np.float64)
     Wlm = _np.asarray(w.Wlm, dtype=_np.float64)
 
+    # 统计已生成 token 频率，用于重复惩罚
+    token_counts: dict = {}
+
     for _ in range(max_new_tokens):
         logits, _ = forward_deep(
             ids, te, pe, Wq, Wk, Wv, Wo, W1, W2, Wlm,
             w.n_heads, w.n_layers, w.max_seq, _np, training=False,
         )
-        last_logits = logits[-1]
+        last_logits = logits[-1].copy()
+
+        # 重复惩罚：降低已生成 token 的 logit
+        if repetition_penalty > 1.0 and token_counts:
+            for tid, count in token_counts.items():
+                if count > 1:
+                    penalty = repetition_penalty ** count
+                    last_logits[tid] /= penalty
+
         if temperature > 0:
-            last_logits = last_logits / max(temperature, 0.01)
-            probs = _np.exp(last_logits - last_logits.max())
-            probs /= probs.sum()
-            next_id = int(rng.choices(range(len(probs)), weights=probs.tolist(), k=1)[0])
+            next_id = _topk_sample_token_id(last_logits, rng, temperature, top_k)
         else:
             next_id = int(_np.argmax(last_logits))
         ids.append(next_id)
+        token_counts[next_id] = token_counts.get(next_id, 0) + 1
 
     return decode(ids, itos)

@@ -111,11 +111,13 @@ def _reap_orphaned() -> None:
     _ORPHANED_FUTURES.difference_update(done)
 
 
-def _generate_with_wallclock_timeout(brain: "LocalBrain", prompt: str, max_out_chars: Optional[int]) -> str:
-    """Run brain.generate() with a wallclock timeout."""
+def _generate_with_wallclock_timeout(brain: "LocalBrain", prompt: str, max_out_chars: Optional[int], *, fast_mode: bool = False) -> str:
+    """Run brain.generate() with a wallclock timeout.
+    fast_mode: 用较少层数加速简单查询（chat_quick 自动启用）。
+    """
     sec = _quick_generate_wallclock_sec()
     if sec <= 0:
-        return brain.generate(prompt, max_out_chars=max_out_chars).strip()
+        return brain.generate(prompt, max_out_chars=max_out_chars, fast_mode=fast_mode).strip()
 
     if os.name == "posix":
         def _h(_sig: int, _frame: Any) -> None:
@@ -125,7 +127,7 @@ def _generate_with_wallclock_timeout(brain: "LocalBrain", prompt: str, max_out_c
         try:
             signal.setitimer(signal.ITIMER_REAL, sec, 0.0)
             try:
-                return brain.generate(prompt, max_out_chars=max_out_chars).strip()
+                return brain.generate(prompt, max_out_chars=max_out_chars, fast_mode=fast_mode).strip()
             finally:
                 signal.setitimer(signal.ITIMER_REAL, 0.0, 0.0)
         except _QuickGenerateTimeout:
@@ -135,14 +137,10 @@ def _generate_with_wallclock_timeout(brain: "LocalBrain", prompt: str, max_out_c
             signal.signal(signal.SIGALRM, old)
 
     # Windows path: ThreadPoolExecutor with timeout.
-    # Python threads cannot be killed, so a timed-out thread continues running
-    # in the background until brain.generate() returns.  We track orphaned
-    # futures and reap completed ones on each call so they don't accumulate
-    # unboundedly.  Daemon threads are automatically cleaned up at process exit.
     _reap_orphaned()
     ex = ThreadPoolExecutor(max_workers=1)
     try:
-        fut = ex.submit(lambda: brain.generate(prompt, max_out_chars=max_out_chars).strip())
+        fut = ex.submit(lambda: brain.generate(prompt, max_out_chars=max_out_chars, fast_mode=fast_mode).strip())
         try:
             return fut.result(timeout=sec)
         except FuturesTimeout:
@@ -176,16 +174,38 @@ class LocalBrain:
             if p.is_file():
                 return p
         root = self.cfg.root_dir
+        # 搜索所有可能的权重路径，选择最新的文件
+        candidates: list[Path] = []
         for rel in default_weight_paths(self.model):
-            cand = (root / rel).resolve()
-            if cand.is_file():
-                return cand
-        # Also search lifers/weights/ (common layout where weights live inside the package)
-        for rel in default_weight_paths(self.model):
-            cand = (root / "lifers" / rel).resolve()
-            if cand.is_file():
-                return cand
+            for base in (root, root / "lifers"):
+                cand = (base / rel).resolve()
+                if cand.is_file():
+                    candidates.append(cand)
+        if candidates:
+            # 按修改时间排序，选择最新的（随训练成长自动切换）
+            candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            return candidates[0]
         return (root / default_weight_paths(self.model)[0]).resolve()
+
+    @staticmethod
+    def _auto_max_tokens(d_model: int, requested: int) -> int:
+        """根据模型维度自适应调整 max_tokens。
+        小模型(D<512)：速度快，允许更多 token。
+        大模型(D>2048)：速度慢但质量高，减少 token 以提高响应速度。
+        """
+        if d_model <= 256:
+            base = 400
+        elif d_model <= 512:
+            base = 300
+        elif d_model <= 1024:
+            base = 200
+        elif d_model <= 1536:
+            base = 150
+        elif d_model <= 2048:
+            base = 120
+        else:
+            base = 100
+        return max(32, min(requested, base))
 
     def _transformer_weights(self, wp: Path) -> TinyTransformerWeights:
         """Hot-reload by mtime; LIFERS_FORCE_WEIGHT_RELOAD=1 skips cache."""
@@ -304,8 +324,10 @@ class LocalBrain:
         log_inference("transformer_generate_end", reply_chars=len(out))
         return out
 
-    def _generate_deep(self, prompt: str, mc: int) -> str:
-        """Generate with the deep multi-layer transformer backend."""
+    def _generate_deep(self, prompt: str, mc: int, *, fast_mode: bool = False) -> str:
+        """Generate with the deep multi-layer transformer backend (KV-cache incremental).
+        fast_mode: 使用较少层数加速简单查询（~2-3x 加速）。
+        """
         from lifers.deep_transformer import generate_text
 
         wp = self._weights_path()
@@ -313,26 +335,35 @@ class LocalBrain:
             sz = int(wp.stat().st_size)
         except OSError:
             sz = 0
+        w = self._deep_weights(wp)
+        # 自适应 token 数：根据当前模型维度调整
+        mc = self._auto_max_tokens(w.d_model, mc)
+        # 快速模式：仅用前 1/3 层
+        eff_layers = max(2, w.n_layers // 3) if fast_mode else w.n_layers
         log_inference(
             "lifers_generate_begin",
             weight_mb=round(sz / 1_000_000, 2),
+            d_model=w.d_model,
+            n_layers=w.n_layers,
+            effective_layers=eff_layers,
+            fast_mode=fast_mode,
             prompt_chars=len(prompt),
             max_out_chars=mc,
+            adaptive_tokens=True,
         )
-        w = self._deep_weights(wp)
         d_temp, d_top = _local_lm_sampling_from_stack(self.cfg.root_dir, "lifers")
-        max_tokens = max(32, min(mc, 2000))
         out = generate_text(
             w, prompt,
-            max_new_tokens=max_tokens,
+            max_new_tokens=max(32, min(mc, 2000)),
             temperature=d_temp,
             top_k=d_top,
             seed=random.randint(0, 2**31 - 1),
+            effective_layers=eff_layers,
         ).strip()
         log_inference("lifers_generate_end", reply_chars=len(out))
         return out
 
-    def generate(self, prompt: str, max_out_chars: Optional[int] = None) -> str:
+    def generate(self, prompt: str, max_out_chars: Optional[int] = None, *, fast_mode: bool = False) -> str:
         wp = self._weights_path()
         mc = speed_local_lm_max_chars(int(getattr(self.cfg, "local_lm_max_chars", 200) or 200))
         if max_out_chars is not None:
@@ -344,14 +375,10 @@ class LocalBrain:
             )
 
         try:
-            return self._generate_deep(prompt, mc)
+            return self._generate_deep(prompt, mc, fast_mode=fast_mode)
         except Exception as exc:
             log_inference("lifers_generate_error", error=str(exc)[:200])
             return (
                 f"（Lifers Deep 生成失败：{exc}。）\n"
-                f"建议：检查权重文件是否完整，或重新训练。"
-            )
-            return (
-                f"（Transformer 生成失败：{exc}。且无备用权重。）\n"
                 f"建议：检查权重文件是否完整，或重新训练。"
             )

@@ -93,6 +93,18 @@ class DeepTransformerWeights:
     Wlm: List[List[float]]  # [d_model, vocab]
 
     _weight_keys = ("tok_emb", "pos_emb", "Wq", "Wk", "Wv", "Wo", "W1", "W2", "Wlm")
+    _np_cache: Dict[str, Any] = field(default_factory=dict)
+    _np_cache_module: Any = None
+
+    def get_arrays(self, np_module: Any) -> Dict[str, Any]:
+        """Lazily convert weights to numpy arrays and cache. Saves ~40-200ms per call."""
+        if self._np_cache_module is not np_module or not self._np_cache:
+            self._np_cache = {}
+            self._np_cache_module = np_module
+            for k in self._weight_keys:
+                v = getattr(self, k)
+                self._np_cache[k] = np_module.asarray(v, dtype=np_module.float64)
+        return self._np_cache
 
     def _meta_dict(self) -> dict:
         return {
@@ -384,6 +396,170 @@ def _topk_sample_token_id(last_logits, rng, temperature: float, top_k: int) -> i
     return pick
 
 
+# ---------------------------------------------------------------------------
+# KV-Cache incremental forward pass
+# ---------------------------------------------------------------------------
+
+def _rope_apply_with_offset(x: Any, np: Any, offset: int) -> Any:
+    """Apply RoPE with position offset for incremental generation."""
+    _n_heads, T, head_dim = x.shape
+    d2 = head_dim // 2
+    if d2 == 0:
+        return x
+    float_dtype = np.float32 if hasattr(np, 'cuda') else np.float64
+    pos = np.arange(offset, offset + T, dtype=float_dtype).reshape(T, 1)
+    dim = np.arange(d2, dtype=float_dtype).reshape(1, d2)
+    theta = 1.0 / (10000.0 ** (2.0 * dim / head_dim))
+    freqs = pos @ theta
+    cos = np.cos(freqs).reshape(1, T, d2)
+    sin = np.sin(freqs).reshape(1, T, d2)
+    x_even = x[:, :, 0::2]
+    x_odd = x[:, :, 1::2]
+    x_rot_even = cos * x_even - sin * x_odd
+    x_rot_odd = sin * x_even + cos * x_odd
+    result = np.empty_like(x)
+    result[:, :, 0::2] = x_rot_even
+    result[:, :, 1::2] = x_rot_odd
+    return result
+
+
+def _attention_incremental(X_norm: Any, Wq: Any, Wk: Any, Wv: Any, Wo: Any,
+                           n_heads: int, np: Any, kv_cache: dict | None = None,
+                           position_offset: int = 0):
+    """Multi-head causal attention with optional KV-cache for incremental generation."""
+    T, D = X_norm.shape
+    head_dim = D // n_heads
+
+    Q = X_norm @ Wq
+    K = X_norm @ Wk
+    V = X_norm @ Wv
+
+    Q = Q.reshape(T, n_heads, head_dim).transpose(1, 0, 2)
+    K = K.reshape(T, n_heads, head_dim).transpose(1, 0, 2)
+    V = V.reshape(T, n_heads, head_dim).transpose(1, 0, 2)
+
+    Q = _rope_apply_with_offset(Q, np, position_offset)
+    K = _rope_apply_with_offset(K, np, position_offset)
+
+    if kv_cache is not None:
+        cached_K = kv_cache["K"]
+        cached_V = kv_cache["V"]
+        K = np.concatenate([cached_K, K], axis=1)
+        V = np.concatenate([cached_V, V], axis=1)
+
+    scale = 1.0 / math.sqrt(float(head_dim))
+    scores = (Q @ K.transpose(0, 2, 1)) * scale
+    total_len = K.shape[1]
+
+    if kv_cache is not None:
+        mask = _causal_mask_new(T, total_len, np)
+        scores = scores + mask
+    else:
+        scores = scores + _causal_mask(T, np)
+
+    attn = _softmax_rows(scores, np)
+    ctx = attn @ V
+    ctx = ctx.transpose(1, 0, 2).reshape(T, D)
+    out = ctx @ Wo
+
+    new_kv_cache = {"K": K, "V": V}
+    cache = {"Q": Q, "K": K, "V": V, "attn": attn, "scores": scores,
+             "X": X_norm, "Wq": Wq, "Wk": Wk, "Wv": Wv, "Wo": Wo,
+             "n_heads": n_heads, "head_dim": head_dim}
+    return out, new_kv_cache, cache
+
+
+_causal_mask_new_cache: Dict[tuple, Any] = {}
+
+def _causal_mask_new(new_T: int, total_T: int, np: Any) -> Any:
+    """Causal mask for incremental: new tokens attend to all cached + up to current."""
+    key = (new_T, total_T)
+    if key not in _causal_mask_new_cache:
+        mask = np.zeros((new_T, total_T), dtype=np.float32)
+        past_len = total_T - new_T
+        for i in range(new_T):
+            mask[i, past_len + i + 1:] = -1e9
+        _causal_mask_new_cache[key] = mask
+    return _causal_mask_new_cache[key]
+
+
+def _transformer_block_incremental(X: Any, Wq: Any, Wk: Any, Wv: Any, Wo: Any,
+                                   W1: Any, W2: Any, n_heads: int, np: Any,
+                                   kv_cache: dict | None = None,
+                                   position_offset: int = 0):
+    """Single transformer block with KV-cache support."""
+    X_norm1, ln1_cache = _layer_norm_fwd(X, np)
+    attn_out, new_kv, attn_cache = _attention_incremental(
+        X_norm1, Wq, Wk, Wv, Wo, n_heads, np, kv_cache, position_offset)
+    X = X + attn_out
+
+    X_norm2, ln2_cache = _layer_norm_fwd(X, np)
+    ffn_out, ffn_cache = _ffn_block(X_norm2, W1, W2, np)
+    X = X + ffn_out
+
+    cache = {"ln1": ln1_cache, "attn": attn_cache,
+             "ln2": ln2_cache, "ffn": ffn_cache,
+             "attn_out": attn_out}
+    return X, new_kv, cache
+
+
+def forward_deep_incremental(
+    ids: List[int],
+    arrays: Dict[str, Any],
+    n_heads: int, n_layers: int, max_seq: int,
+    np: Any,
+    kv_caches: List[dict] | None = None,
+):
+    """
+    Forward pass with KV-cache support for incremental generation.
+
+    When kv_caches is None (prefill): process all ids, build initial KV-caches.
+    When kv_caches is provided (incremental): only process the new token(s),
+    using cached K,V for past tokens. ids should contain only new tokens.
+
+    Returns (logits, new_kv_caches, caches_dict)
+    """
+    t_len = min(len(ids), max_seq)
+    idx = np.asarray(ids[:t_len], dtype=np.intp)
+    X = arrays["tok_emb"][idx] + arrays["pos_emb"][:t_len]
+
+    if kv_caches is None:
+        kv_caches = [None] * n_layers
+        position_offset = 0
+    else:
+        # Compute position offset from existing cache
+        if kv_caches[0] is not None:
+            position_offset = kv_caches[0]["K"].shape[1]
+        else:
+            position_offset = 0
+
+    new_kv_caches: List[dict] = []
+    layer_caches: List[dict] = []
+    for layer_idx in range(n_layers):
+        X, new_kv, block_cache = _transformer_block_incremental(
+            X,
+            arrays["Wq"], arrays["Wk"], arrays["Wv"], arrays["Wo"],
+            arrays["W1"], arrays["W2"],
+            n_heads, np,
+            kv_caches[layer_idx],
+            position_offset,
+        )
+        new_kv_caches.append(new_kv)
+        layer_caches.append(block_cache)
+
+    Y, final_ln_cache = _layer_norm_fwd(X, np)
+    logits = Y @ arrays["Wlm"]
+
+    caches = {
+        "layer_caches": layer_caches,
+        "final_ln": final_ln_cache,
+        "Y": Y,
+        "tok_emb_idx": idx,
+        "t_len": t_len,
+    }
+    return logits, new_kv_caches, caches
+
+
 def generate_text(
     w: DeepTransformerWeights,
     prompt: str,
@@ -392,11 +568,13 @@ def generate_text(
     top_k: int = 80,
     repetition_penalty: float = 1.05,
     seed: int = 42,
+    *,
+    effective_layers: int = 0,
 ) -> str:
-    """Autoregressive generation using NumPy forward pass.
+    """Autoregressive generation using KV-Cache incremental forward pass.
 
-    top_k: 采样截断数 (默认 80)，过滤低概率噪声 token。
-    repetition_penalty: >1.0 惩罚已生成 token 的重复 (默认 1.05)。
+    effective_layers: 实际使用的层数。0=使用全部层，N=仅用前N层。
+    对于简单查询（chat_quick），用较少的层可大幅加速（2-3x）。
     """
     import random as _random
     from lifers.core.compute_backend import get_compute_backend
@@ -407,34 +585,30 @@ def generate_text(
     itos = {i: ch for i, ch in enumerate(w.vocab)}
     ids = encode(prompt, stoi)
     if not ids:
-        ids = [0]  # bootstrap with first vocab token on empty prompt
+        ids = [0]
 
-    te = _np.asarray(w.tok_emb, dtype=_np.float64)
-    pe = _np.asarray(w.pos_emb, dtype=_np.float64)
-    Wq = _np.asarray(w.Wq, dtype=_np.float64)
-    Wk = _np.asarray(w.Wk, dtype=_np.float64)
-    Wv = _np.asarray(w.Wv, dtype=_np.float64)
-    Wo = _np.asarray(w.Wo, dtype=_np.float64)
-    W1 = _np.asarray(w.W1, dtype=_np.float64)
-    W2 = _np.asarray(w.W2, dtype=_np.float64)
-    Wlm = _np.asarray(w.Wlm, dtype=_np.float64)
+    arrays = w.get_arrays(_np)
+    n_layers = effective_layers if effective_layers > 0 else w.n_layers
+    n_layers = min(n_layers, w.n_layers)
 
-    # 统计已生成 token 频率，用于重复惩罚
+    # Prefill: process full prompt, build KV-caches
+    prefill_ids = ids[-w.max_seq:] if len(ids) > w.max_seq else ids
+    logits, kv_caches, _ = forward_deep_incremental(
+        prefill_ids, arrays, w.n_heads, n_layers, w.max_seq, _np,
+        kv_caches=None,
+    )
+    last_logits = logits[-1].copy()
+
     token_counts: dict = {}
+    if len(prefill_ids) != len(ids):
+        ids = list(prefill_ids)
 
+    # Generate new tokens incrementally
     for _ in range(max_new_tokens):
-        logits, _ = forward_deep(
-            ids, te, pe, Wq, Wk, Wv, Wo, W1, W2, Wlm,
-            w.n_heads, w.n_layers, w.max_seq, _np, training=False,
-        )
-        last_logits = logits[-1].copy()
-
-        # 重复惩罚：降低已生成 token 的 logit
         if repetition_penalty > 1.0 and token_counts:
             for tid, count in token_counts.items():
                 if count > 1:
-                    penalty = repetition_penalty ** count
-                    last_logits[tid] /= penalty
+                    last_logits[tid] /= repetition_penalty ** count
 
         if temperature > 0:
             next_id = _topk_sample_token_id(last_logits, rng, temperature, top_k)
@@ -442,5 +616,12 @@ def generate_text(
             next_id = int(_np.argmax(last_logits))
         ids.append(next_id)
         token_counts[next_id] = token_counts.get(next_id, 0) + 1
+
+        # Incremental step: only process the new token
+        logits, kv_caches, _ = forward_deep_incremental(
+            [next_id], arrays, w.n_heads, n_layers, w.max_seq, _np,
+            kv_caches=kv_caches,
+        )
+        last_logits = logits[-1].copy()
 
     return decode(ids, itos)

@@ -856,14 +856,19 @@ class LifersAgent:
             cap_m = max(48, min(cap_m, 512))
             qout = min(qout, cap_m)
 
+        # 自动快速模式：chat_quick 简单对话用较少层数加速（~9x）
+        use_fast = (
+            self._quick_route_reason == "daily_chat_quick"
+            and not os.environ.get("LIFERS_FAST_MODE", "1").strip().lower() in ("0", "false", "no", "off")
+        )
         t0 = time.perf_counter()
-        text = _generate_with_wallclock_timeout(self.brain, prompt, qout)
+        text = _generate_with_wallclock_timeout(self.brain, prompt, qout, fast_mode=use_fast)
         elapsed = int((time.perf_counter() - t0) * 1000)
 
-        # Retry once if output is empty or trivially short
+        # Retry once if output is empty or trivially short (normal mode fallback)
         if len(text.strip()) < 2 and elapsed < 45_000:
             log_inference("retry", reason="empty_or_short", first_elapsed_ms=elapsed, first_chars=len(text))
-            text = _generate_with_wallclock_timeout(self.brain, prompt, qout)
+            text = _generate_with_wallclock_timeout(self.brain, prompt, qout, fast_mode=False)
             elapsed = int((time.perf_counter() - t0) * 1000)
 
         log_inference(

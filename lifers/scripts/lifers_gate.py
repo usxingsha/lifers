@@ -124,6 +124,9 @@ class LifersGateHandler(BaseHTTPRequestHandler):
     server_version = "lifers-gate/1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
+        from lifers.silent_mode import is_silent
+        if is_silent():
+            return  # 静默模式压制HTTP日志
         sys.stderr.write("%s - - [%s] %s\n" % (self.address_string(), self.log_date_time_string(), fmt % args))
 
     def do_OPTIONS(self) -> None:
@@ -146,15 +149,87 @@ class LifersGateHandler(BaseHTTPRequestHandler):
                     "codename_zh": "终身监禁者",
                     "bind": f"{host}:{port}",
                     "lifers_root": str((ROOT).resolve()),
-                    "post_step": 'POST /v1/step  Content-Type: application/json  {"text":"","contextFiles":[]}',
-                    "post_stream": 'POST /v1/stream  {"text":"","maxChars":200}  → chunked text/plain',
+                    "capabilities": {
+                        "auth": True, "tls": os.environ.get("LIFERS_TLS", "") == "1",
+                        "cluster": os.environ.get("LIFERS_CLUSTER", "") == "1",
+                        "websocket": True, "fleet": True,
+                    },
+                    "endpoints": {
+                        "step": "POST /v1/step",
+                        "stream": "POST /v1/stream",
+                        "auth_login": "POST /auth/login",
+                        "auth_register": "POST /auth/register",
+                        "auth_api_key": "POST /auth/api-key",
+                        "fleet_robots": "GET /v1/fleet/robots",
+                        "fleet_health": "GET /v1/fleet/health",
+                        "cluster_status": "GET /v1/cluster/status",
+                    },
                 },
             )
+        elif path.startswith("/v1/fleet/"):
+            # 舰队管理端点
+            from lifers.fleet import fleet_http_handler
+            from lifers.auth import require_auth
+            headers = {k: v for k, v in self.headers.items()}
+            auth_payload = require_auth(headers)
+            if not auth_payload:
+                _json_response(self, 401, {"error": "Unauthorized"})
+                return
+            sub_path = "/" + path.split("/", 3)[-1] if len(path.split("/")) > 3 else path
+            result = fleet_http_handler("GET", path, auth_payload)
+            _json_response(self, 200, result)
+        elif path.startswith("/v1/cluster/"):
+            from lifers.cluster import cluster_http_handler
+            result = cluster_http_handler("GET", path, {})
+            _json_response(self, 200, result)
         else:
             _json_response(self, 404, {"ok": False, "error": "not found"})
 
     def do_POST(self) -> None:
         path = self.path.split("?", 1)[0].rstrip("/")
+
+        # ---- 认证端点 (无需预认证) ----
+        if path in ("/auth/login", "/auth/register", "/auth/api-key"):
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                length = 0
+            raw = self.rfile.read(length).decode("utf-8", errors="replace")
+            body = json.loads(raw) if raw.strip() else {}
+            from lifers.auth import auth_http_handler
+            headers = {k: v for k, v in self.headers.items()}
+            result = auth_http_handler("POST", path, headers, body)
+            if isinstance(result, tuple):
+                data, code = result
+                _json_response(self, code, data)
+            else:
+                _json_response(self, 200, result)
+            return
+
+        # ---- 舰队管理端点 ----
+        if path.startswith("/v1/fleet/"):
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                length = 0
+            raw = self.rfile.read(length).decode("utf-8", errors="replace")
+            body = json.loads(raw) if raw.strip() else {}
+            from lifers.fleet import fleet_http_handler
+            from lifers.auth import require_auth
+            headers = {k: v for k, v in self.headers.items()}
+            auth_payload = require_auth(headers)
+            if not auth_payload:
+                _json_response(self, 401, {"error": "Unauthorized"})
+                return
+            result = fleet_http_handler("POST", path, auth_payload, body)
+            if isinstance(result, tuple):
+                data, code = result
+                _json_response(self, code, data)
+            else:
+                _json_response(self, 200, result)
+            return
+
+        # ---- 原有端点 ----
         if path not in ("/v1/step", "/step", "/v1/stream", "/stream"):
             _json_response(self, 404, {"ok": False, "error": "not found"})
             return
@@ -204,25 +279,22 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="lifers gate (终身监禁者) HTTP service")
     parser.add_argument("--host", default="127.0.0.1", help="bind address (use 0.0.0.0 only in trusted LAN)")
     parser.add_argument("--port", type=int, default=55555, help="listen port (default 55555)")
+    parser.add_argument("--silent", action="store_true", help="静默模式（输出写入文件）")
     args = parser.parse_args()
 
+    if args.silent:
+        os.environ["LIFERS_SILENT"] = "1"
+    from lifers.silent_mode import is_silent, service_banner
+    if is_silent():
+        from lifers.silent_mode import setup_silent
+        setup_silent("gate")
+
     httpd = ThreadingHTTPServer((args.host, args.port), LifersGateHandler)
-    print(
-        json.dumps(
-            {
-                "lifers": "gate_start",
-                "codename_zh": "终身监禁者",
-                "listen": f"{args.host}:{args.port}",
-                "root": str(ROOT.resolve()),
-            },
-            ensure_ascii=False,
-        ),
-        flush=True,
-    )
+    print(service_banner("gate_start", codename_zh="终身监禁者", listen=f"{args.host}:{args.port}", root=str(ROOT.resolve())), flush=True)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
-        print("\n[lifers] stop", flush=True)
+        print('\n{"lifers":"gate_stop"}', flush=True)
 
 
 if __name__ == "__main__":

@@ -228,7 +228,7 @@ def print_status(status: Dict):
         print(f"\n  [Deep Escalate] D={de.get('d_model')} V={de.get('vocab')} "
               f"Tier {de.get('ramp_iter')}/{de.get('ramp_max')} "
               f"SGD {de.get('sgd_step')}/{de.get('sgd_total')} "
-              f"({de.get('overall_pct', 0):.1f}%) PID={de.get('pid')}")
+              f"({(de.get('overall_pct') or 0):.1f}%) PID={de.get('pid')}")
     else:
         print(f"\n  [Deep Escalate] 未运行")
 

@@ -169,9 +169,20 @@ def _quick_chat_cn_greeting_reply(user_line: str) -> Optional[str]:
 
 
 _META_CAP_SHORT = re.compile(
-    r"^(能做什么|你会什么|会什么|能帮我什么|有啥功能|什么功能|介绍一下自己|自我介绍|干嘛的|干什么的|你做什么)"
+    r"^(能做什么|你会什么|会什么|能帮我什么|有啥功能|什么功能|介绍一下自己|自我介绍|干嘛的|干什么的|你做什么|你是谁|你的名字|叫什么)"
     r"[！!。.…?？~\s]*$"
 )
+
+# Extended pattern for meta-capability detection in longer messages
+_META_CAP_LONG = re.compile(
+    r"(介绍一下你自己|你是谁|你叫什么|你的名字是什么|你能做|你会什么|你有哪些功能|你的能力|你有什么能力|你怎么用|如何使用|怎么使用你)"
+)
+
+# Common helper questions that can be answered with templates
+_HELP_PATTERNS = [
+    (re.compile(r"(帮我|帮忙|协助|帮助).{0,10}(做什么|干什么|怎么)"), "help_usage"),
+    (re.compile(r"(怎么用|如何用|使用教程|操作指南|使用说明)"), "help_usage"),
+]
 
 
 def _quick_chat_meta_capability_reply(user_line: str) -> Optional[str]:
@@ -179,16 +190,33 @@ def _quick_chat_meta_capability_reply(user_line: str) -> Optional[str]:
     u = user_line.strip()
     if not u or len(u) > 400:
         return None
-    if _META_SELF_RE.search(u) or _META_CAP_SHORT.match(u):
+    if _META_SELF_RE.search(u) or _META_CAP_SHORT.match(u) or _META_CAP_LONG.search(u):
         return (
-            "我是 **Lifers** 本地助手（对话任务类型由「对话推理分发器」分到 CHAT_QUICK / 工具链等）。\n\n"
-            "**常见用法：**\n"
-            "- **日常聊天**：直接中文提问（权重在 `weights/`，体量大会慢，见 README）。\n"
-            "- **联网检索**：发 **`search 关键词`** 或「帮我搜索…」类句式（需联网且 **lifers.sandbox** 非纯沙盒）。\n"
-            "- **文件上下文**：侧栏 / **`@`** 把路径加入会话后再问。\n"
-            "- **方案预览**：行首 **`方案`** 或 **`plan`**。\n\n"
-            "扩展默认 **LIFERS_FORCE_LOCAL_ONLY**：不接云端 Chat API；更强模型见 **stack.remote_infer**（终端高级用法）。"
+            "你好！我是 **Lifers（终身监禁者）**，一个本地运行的 AI 助手。\n\n"
+            "**我能做什么：**\n"
+            "- 日常聊天和情感陪伴\n"
+            "- 技术问答和代码分析\n"
+            "- 知识查询和学习辅助\n"
+            "- 文件内容阅读和分析\n\n"
+            "**当前状态：** 运行在本地权重模式，Deep Transformer 正在 Kali 上训练中（tier 30/60，~59M 参数）。\n"
+            "训练完成后推理质量将大幅提升。目前部分回答可能不够流畅，请用完整中文句描述需求。\n\n"
+            "**快捷指令：**\n"
+            "- `search 关键词` — 搜索资料\n"
+            "- `方案 xxx` — 获取方案建议\n"
+            "- Ctrl+Enter — 发送消息"
         )
+    # Help/usage patterns
+    for pattern, kind in _HELP_PATTERNS:
+        if pattern.search(u):
+            return (
+                "**Lifers 使用指南：**\n\n"
+                "1. **直接对话**：在输入框输入中文问题，按 Enter 发送\n"
+                "2. **代码分析**：点击顶部「编辑器」打开代码面板，粘贴代码后点「分析代码」\n"
+                "3. **搜索资料**：输入 `search 关键词`\n"
+                "4. **切换模型**：顶部下拉菜单可选 Lifers/Transformer/Markov\n"
+                "5. **清空对话**：点击「清空」或按 Ctrl+K\n\n"
+                "当前 AI 深度训练进行中，回复质量会持续提升。建议用简洁完整的中文句提问。"
+            )
     return None
 
 
@@ -413,6 +441,12 @@ class LifersAgent:
             "Reply in natural Chinese when the user writes Chinese; be concise, accurate, and safe. "
             "If unsure, say so honestly rather than fabricating. "
             "This turn is CHAT_QUICK (route → local brain): no tools ran yet — use LONGTERM_RECALL and session.\n"
+            "REASONING INSTRUCTIONS:\n"
+            "- For complex questions, think step-by-step: first analyze the problem, then outline your approach, then give the answer.\n"
+            "- Break down multi-part questions and address each part separately.\n"
+            "- When providing code or technical solutions, explain the rationale before the implementation.\n"
+            "- For factual questions, state what you know and flag any uncertainty.\n"
+            "- Be thorough but avoid unnecessary verbosity.\n"
         )
         sess = self.session.context_text()
         smax = self._quick_session_context_chars()

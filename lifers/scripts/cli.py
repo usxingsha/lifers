@@ -371,16 +371,6 @@ def cmd_stats() -> int:
         except Exception:
             pass
 
-    # Config
-    cfg = _load_config()
-    if cfg:
-        if _HAS_RICH:
-            console.print("\n[bold]Configuration:[/bold]")
-            for k, v in cfg.items():
-                console.print(f"  [dim]{k}[/dim] = {v}")
-        else:
-            print("\n配置:", cfg)
-
     return 0
 
 

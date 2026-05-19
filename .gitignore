@@ -45,6 +45,7 @@ __pycache__/
 
 # Local workspace overlay (optional)
 /config/workspace_custom.json
+/config/.auth_secret
 
 # OpenClaw 通过 git submodule 跟踪（见 .gitmodules）；勿忽略 third_party/openclaw。
 # 亦可用 scripts/vendor_openclaw_reference.ps1 浅克隆；纳入仓库时请改为 submodule 或删除目录后 git submodule add。

@@ -1,0 +1,206 @@
+{
+  "brand": "Lifers Dashboard Config",
+  "version": 1,
+  "metrics": [
+    {
+      "name": "系统健康分",
+      "importance": 0.95,
+      "refresh_interval": 10,
+      "alert_threshold": 0.7,
+      "category": "health"
+    },
+    {
+      "name": "CPU使用率",
+      "importance": 0.85,
+      "refresh_interval": 5,
+      "alert_threshold": 90.0,
+      "category": "resource"
+    },
+    {
+      "name": "内存使用率",
+      "importance": 0.85,
+      "refresh_interval": 5,
+      "alert_threshold": 85.0,
+      "category": "resource"
+    },
+    {
+      "name": "磁盘使用率",
+      "importance": 0.75,
+      "refresh_interval": 30,
+      "alert_threshold": 90.0,
+      "category": "resource"
+    },
+    {
+      "name": "网络带宽",
+      "importance": 0.7,
+      "refresh_interval": 10,
+      "alert_threshold": 0.0,
+      "category": "resource"
+    },
+    {
+      "name": "训练进度",
+      "importance": 0.9,
+      "refresh_interval": 15,
+      "alert_threshold": 0.0,
+      "category": "training"
+    },
+    {
+      "name": "训练损失",
+      "importance": 0.9,
+      "refresh_interval": 15,
+      "alert_threshold": 0.0,
+      "category": "training"
+    },
+    {
+      "name": "推理延迟",
+      "importance": 0.8,
+      "refresh_interval": 5,
+      "alert_threshold": 500.0,
+      "category": "performance"
+    },
+    {
+      "name": "对话响应率",
+      "importance": 0.8,
+      "refresh_interval": 10,
+      "alert_threshold": 0.95,
+      "category": "interaction"
+    },
+    {
+      "name": "安全告警",
+      "importance": 0.95,
+      "refresh_interval": 5,
+      "alert_threshold": 1.0,
+      "category": "safety"
+    },
+    {
+      "name": "主动行为触发",
+      "importance": 0.7,
+      "refresh_interval": 30,
+      "alert_threshold": 0.0,
+      "category": "behavior"
+    },
+    {
+      "name": "知识图谱更新",
+      "importance": 0.65,
+      "refresh_interval": 60,
+      "alert_threshold": 0.0,
+      "category": "knowledge"
+    },
+    {
+      "name": "语料库大小",
+      "importance": 0.55,
+      "refresh_interval": 120,
+      "alert_threshold": 0.0,
+      "category": "storage"
+    },
+    {
+      "name": "模型版本",
+      "importance": 0.6,
+      "refresh_interval": 300,
+      "alert_threshold": 0.0,
+      "category": "config"
+    },
+    {
+      "name": "日志错误率",
+      "importance": 0.9,
+      "refresh_interval": 10,
+      "alert_threshold": 0.01,
+      "category": "health"
+    }
+  ],
+  "optimized": {
+    "critical_metrics": [
+      "系统健康分",
+      "安全告警",
+      "训练进度",
+      "训练损失",
+      "日志错误率",
+      "CPU使用率",
+      "内存使用率",
+      "推理延迟",
+      "对话响应率",
+      "磁盘使用率",
+      "网络带宽",
+      "主动行为触发",
+      "知识图谱更新",
+      "模型版本"
+    ],
+    "categories": {
+      "health": {
+        "count": 2,
+        "avg_importance": 0.925,
+        "min_refresh": 10
+      },
+      "safety": {
+        "count": 1,
+        "avg_importance": 0.95,
+        "min_refresh": 5
+      },
+      "training": {
+        "count": 2,
+        "avg_importance": 0.9,
+        "min_refresh": 15
+      },
+      "resource": {
+        "count": 4,
+        "avg_importance": 0.788,
+        "min_refresh": 5
+      },
+      "performance": {
+        "count": 1,
+        "avg_importance": 0.8,
+        "min_refresh": 5
+      },
+      "interaction": {
+        "count": 1,
+        "avg_importance": 0.8,
+        "min_refresh": 10
+      },
+      "behavior": {
+        "count": 1,
+        "avg_importance": 0.7,
+        "min_refresh": 30
+      },
+      "knowledge": {
+        "count": 1,
+        "avg_importance": 0.65,
+        "min_refresh": 60
+      },
+      "config": {
+        "count": 1,
+        "avg_importance": 0.6,
+        "min_refresh": 300
+      },
+      "storage": {
+        "count": 1,
+        "avg_importance": 0.55,
+        "min_refresh": 120
+      }
+    },
+    "adaptive_refresh_s": 37,
+    "importance_threshold": 0.6,
+    "total_metrics": 15,
+    "sorted_by_importance": [
+      [
+        "系统健康分",
+        0.95
+      ],
+      [
+        "安全告警",
+        0.95
+      ],
+      [
+        "训练进度",
+        0.9
+      ],
+      [
+        "训练损失",
+        0.9
+      ],
+      [
+        "日志错误率",
+        0.9
+      ]
+    ]
+  }
+}

@@ -19,9 +19,16 @@ def _load_jsonl_inputs(path: Path) -> str:
 
 
 def _load_training_corpus(root: Path) -> str:
-    """Load training corpus: prefer weights/training_corpus.txt, fall back to eval suites."""
+    """Load training corpus: prefer weights/training_corpus.txt, fall back to eval suites.
+    Supports LIFERS_CORPUS_MAX_MB env var to limit memory usage (default 200MB)."""
+    max_mb = int(os.environ.get("LIFERS_CORPUS_MAX_MB", "200"))
     corpus_txt = root / "weights" / "training_corpus.txt"
     if corpus_txt.is_file():
+        size_mb = corpus_txt.stat().st_size / (1024 * 1024)
+        # Stream first max_mb to avoid MemoryError on large corpora
+        if size_mb > max_mb:
+            with open(corpus_txt, "r", encoding="utf-8") as f:
+                return f.read(max_mb * 1024 * 1024)
         return corpus_txt.read_text(encoding="utf-8")
     suite = root / "eval" / "suites" / "v001"
     text = []
@@ -31,7 +38,7 @@ def _load_training_corpus(root: Path) -> str:
 
 
 def main() -> None:
-    root = Path(__file__).resolve().parent.parent
+    root = Path(__file__).resolve().parent.parent.parent
     corpus = _load_training_corpus(root)
 
     out = root / "weights" / "lifers_transformer.json"

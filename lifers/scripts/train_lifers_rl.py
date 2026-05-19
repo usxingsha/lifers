@@ -13,7 +13,9 @@ from collections import deque
 from pathlib import Path
 from typing import List, Dict, Tuple
 
-import numpy as np
+import numpy as cpu_np
+from lifers.core.compute_backend import get_compute_backend
+np, _DEVICE, _GPU_INFO = get_compute_backend()
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -46,7 +48,7 @@ class LifersGridWorld:
             self.agent_pos / self.size,
             self.objects.flatten() / self.size,
             self.hazards.flatten() / self.size,
-            [self.collected / self.n_objects, self.steps / self.max_steps],
+            np.array([self.collected / self.n_objects, self.steps / self.max_steps], dtype=np.float32),
         ]).astype(np.float32)
         padded = np.zeros(32, dtype=np.float32)
         padded[:len(state)] = state
@@ -252,7 +254,7 @@ def train_lifers_rl(
 
         while not done:
             q_values = model.forward(state)
-            if env_rng.random() < epsilon:
+            if env_rng.random_sample() < epsilon:
                 action = env_rng.randint(0, 8)
             else:
                 action = int(np.argmax(q_values))

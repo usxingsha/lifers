@@ -13,7 +13,9 @@ import time
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 
-import numpy as np
+import numpy as cpu_np
+from lifers.core.compute_backend import get_compute_backend
+np, _DEVICE, _GPU_INFO = get_compute_backend()
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -477,8 +479,8 @@ class LifersKGTrainer:
         if self.model is None:
             return {"loss": 0.0, "mean_rank": 0.0}
 
-        rng = np.random.RandomState()
-        indices = list(range(len(self._train_triples)))
+        rng = cpu_np.random.RandomState()
+        indices = cpu_np.arange(len(self._train_triples), dtype=cpu_np.int32)
         rng.shuffle(indices)
 
         total_loss = 0.0
@@ -488,50 +490,60 @@ class LifersKGTrainer:
 
         for start in range(0, len(indices), batch_size):
             batch = indices[start:start + batch_size]
-            batch_loss = 0.0
+            B = len(batch)
 
+            # GPU批量化: 提取所有头/关系/尾索引
+            h_list, r_list, t_list = [], [], []
             for idx in batch:
-                h, r, t = self._train_triples[idx]
-                h_emb = self.model.entity_emb[h]
-                r_emb = self.model.rel_emb[r]
-                t_emb = self.model.entity_emb[t]
+                h, r, t = self._train_triples[int(idx)]
+                h_list.append(h); r_list.append(r); t_list.append(t)
 
-                pos_score = np.linalg.norm(h_emb + r_emb - t_emb)
+            h_idx = np.array(h_list, dtype=np.int32)
+            r_idx = np.array(r_list, dtype=np.int32)
+            t_idx = np.array(t_list, dtype=np.int32)
 
-                # 硬负采样: 从多个随机负样本中选距离最小的
-                n_neg = 8
-                best_neg_score = float("inf")
-                best_neg_t = -1
-                for _ in range(n_neg):
-                    neg_t = rng.randint(0, n_entities)
-                    while neg_t == t:
-                        neg_t = rng.randint(0, n_entities)
-                    neg_score = np.linalg.norm(h_emb + r_emb - self.model.entity_emb[neg_t])
-                    if neg_score < best_neg_score:
-                        best_neg_score = neg_score
-                        best_neg_t = neg_t
+            # 批量嵌入查找 (B, dim)
+            h_emb = self.model.entity_emb[h_idx]
+            r_emb = self.model.rel_emb[r_idx]
+            t_emb = self.model.entity_emb[t_idx]
 
-                neg_t_emb = self.model.entity_emb[best_neg_t]
-                neg_score = best_neg_score
+            # 批量正分: L2(h+r-t)
+            pos_vec = h_emb + r_emb - t_emb  # (B, dim)
+            pos_scores = np.linalg.norm(pos_vec, axis=1) + 1e-8  # (B,)
 
-                loss = max(0.0, self.margin + pos_score - neg_score)
-                batch_loss += loss
+            # 批量负采样: 随机实体 (B,) 排除正样本
+            neg_t_idx = rng.randint(0, n_entities, size=B)
+            mask_eq = (neg_t_idx == t_idx)
+            if np.any(mask_eq):
+                neg_t_idx[mask_eq] = (neg_t_idx[mask_eq] + 1) % n_entities
 
-                # Mean Rank
-                all_scores = np.linalg.norm(h_emb + r_emb - self.model.entity_emb, axis=1)
-                rank = int(np.sum(all_scores < pos_score)) + 1
-                total_rank += rank
+            neg_t_emb = self.model.entity_emb[neg_t_idx]  # (B, dim)
+            neg_vec = h_emb + r_emb - neg_t_emb  # (B, dim)
+            neg_scores = np.linalg.norm(neg_vec, axis=1) + 1e-8  # (B,)
 
-                # 梯度更新
-                if loss > 0:
-                    d_pos = (h_emb + r_emb - t_emb) / (pos_score + 1e-8)
-                    d_neg = (h_emb + r_emb - neg_t_emb) / (neg_score + 1e-8)
+            # 批量hinge loss
+            margin_vec = np.maximum(0.0, self.margin + pos_scores - neg_scores)  # (B,)
+            batch_loss = float(np.sum(margin_vec))
 
-                    self.model.entity_emb[h] -= self.lr * (d_pos - d_neg)
-                    self.model.rel_emb[r] -= self.lr * (d_pos - d_neg)
-                    self.model.entity_emb[t] += self.lr * d_pos
-                    self.model.entity_emb[best_neg_t] -= self.lr * d_neg
+            # 批量梯度 (仅对loss>0的样本更新)
+            active = margin_vec > 0
+            if np.any(active):
+                d_pos = pos_vec / pos_scores.reshape(-1, 1)  # (B, dim)
+                d_neg = neg_vec / neg_scores.reshape(-1, 1)  # (B, dim)
 
+                # 实体嵌入梯度累积 (用 scatter add)
+                lr = self.lr
+                for i in range(B):
+                    if not active[i]:
+                        continue
+                    hi, ri, ti, ni = int(h_idx[i]), int(r_idx[i]), int(t_idx[i]), int(neg_t_idx[i])
+                    dp, dn = d_pos[i], d_neg[i]
+                    self.model.entity_emb[hi] -= lr * (dp - dn)
+                    self.model.rel_emb[ri] -= lr * (dp - dn)
+                    self.model.entity_emb[ti] += lr * dp
+                    self.model.entity_emb[ni] -= lr * dn
+
+            total_loss += batch_loss
             n_batches += 1
 
         # 归一化嵌入

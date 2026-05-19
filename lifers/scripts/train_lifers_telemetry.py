@@ -11,7 +11,9 @@ import time
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-import numpy as np
+import numpy as cpu_np
+from lifers.core.compute_backend import get_compute_backend
+np, _DEVICE, _GPU_INFO = get_compute_backend()
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 N_FEATURES = 8

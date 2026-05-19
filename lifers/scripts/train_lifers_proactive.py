@@ -12,7 +12,9 @@ from collections import Counter
 from pathlib import Path
 from typing import List, Dict, Optional
 
-import numpy as np
+import numpy as cpu_np
+from lifers.core.compute_backend import get_compute_backend
+np, _DEVICE, _GPU_INFO = get_compute_backend()
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 

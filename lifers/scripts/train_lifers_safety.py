@@ -13,7 +13,9 @@ import time
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 
-import numpy as np
+import numpy as cpu_np
+from lifers.core.compute_backend import get_compute_backend
+np, _DEVICE, _GPU_INFO = get_compute_backend()
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -211,7 +213,7 @@ class LifersSafetyClassifier:
         self.W2 = rng.randn(hidden1, hidden2).astype(np.float32) * np.sqrt(2.0 / hidden1)
         self.b2 = np.zeros(hidden2, dtype=np.float32)
         self.W3 = rng.randn(hidden2).astype(np.float32) * 0.01
-        self.b3 = 0.0
+        self.b3 = np.float32(0.0)
         self.input_dim = input_dim
         self.hidden1 = hidden1
         self.hidden2 = hidden2
@@ -266,7 +268,8 @@ def _adam_update(model, grads, lr, beta1=0.9, beta2=0.999, eps=1e-8):
 def _mini_batch_train(model, X, y, lr, batch_size, rng):
     """mini-batch SGD + Adam 训练"""
     n = len(X)
-    indices = list(range(n))
+    # CPU indices 避免 GPU RNG shuffle 卡住
+    indices = cpu_np.arange(n, dtype=cpu_np.int32)
     rng.shuffle(indices)
     total_loss = 0.0
     correct = 0
@@ -284,15 +287,8 @@ def _mini_batch_train(model, X, y, lr, batch_size, rng):
         H2 = np.maximum(0, H2_pre)
         logits = H2 @ model.W3 + model.b3
 
-        # sigmoid
-        probs = np.zeros(bs, dtype=np.float64)
-        for k in range(bs):
-            logit_k = float(logits[k])
-            if logit_k >= 0:
-                probs[k] = 1.0 / (1.0 + math.exp(-logit_k))
-            else:
-                exp_l = math.exp(logit_k)
-                probs[k] = exp_l / (1.0 + exp_l)
+        # sigmoid (GPU向量化)
+        probs = 1.0 / (1.0 + np.exp(-logits))
 
         eps = 1e-8
         losses = -(y_batch * np.log(probs + eps) + (1 - y_batch) * np.log(1 - probs + eps))
@@ -383,7 +379,7 @@ def train_safety_classifier(
     y = np.array([0.0] * len(safe_data) + [1.0] * len(unsafe_data), dtype=np.float32)
 
     model = LifersSafetyClassifier(input_dim=256, hidden1=128, hidden2=64)
-    rng = np.random.RandomState(123)
+    rng = cpu_np.random.RandomState(123)
     best_acc = 0.0
     best_weights = None
 
@@ -443,7 +439,7 @@ def load_safety_model(path: Path) -> LifersSafetyClassifier:
     model.W2 = np.array(data["W2"], dtype=np.float32)
     model.b2 = np.array(data["b2"], dtype=np.float32)
     model.W3 = np.array(data["W3"], dtype=np.float32)
-    model.b3 = float(data["b3"])
+    model.b3 = np.float32(data["b3"])
     return model
 
 

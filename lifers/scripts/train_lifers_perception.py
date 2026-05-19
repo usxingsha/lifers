@@ -12,7 +12,9 @@ from collections import Counter
 from pathlib import Path
 from typing import List, Dict, Optional
 
-import numpy as np
+import numpy as cpu_np
+from lifers.core.compute_backend import get_compute_backend
+np, _DEVICE, _GPU_INFO = get_compute_backend()
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 N_CLASSES = 6
@@ -266,10 +268,10 @@ def _train_perception_fallback(n_epochs, lr, save_path, verbose):
     X = np.array([_perception_feature(t) for t, _ in samples], dtype=np.float32)
     y = np.array([l for _, l in samples], dtype=np.int32)
     model = PerceptionClassifier(n_features=256)
-    rng = np.random.RandomState(123)
+    rng = cpu_np.random.RandomState(123)
     best_acc = 0.0
     for epoch in range(n_epochs):
-        indices = list(range(len(X)))
+        indices = cpu_np.arange(len(X), dtype=cpu_np.int32)
         rng.shuffle(indices)
         correct = 0
         for idx in indices:

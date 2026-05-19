@@ -13,7 +13,9 @@ import time
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 
-import numpy as np
+import numpy as cpu_np
+from lifers.core.compute_backend import get_compute_backend
+np, _DEVICE, _GPU_INFO = get_compute_backend()
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -216,8 +218,8 @@ class LifersVoiceTrainer:
         self._loss_history: List[float] = []
 
     def train_epoch(self, data: List[Tuple[np.ndarray, int]], batch_size: int = 32) -> Dict[str, float]:
-        rng = np.random.RandomState()
-        indices = list(range(len(data)))
+        rng = cpu_np.random.RandomState()
+        indices = cpu_np.arange(len(data), dtype=cpu_np.int32)
         rng.shuffle(indices)
         total_loss = 0.0
         correct = 0
@@ -225,34 +227,57 @@ class LifersVoiceTrainer:
 
         for start in range(0, len(indices), batch_size):
             batch_idx = indices[start:start + batch_size]
-            batch_grads = {k: np.zeros_like(v) for k, v in self.model.get_params().items()}
-            batch_loss = 0.0
-            batch_correct = 0
+            bs = len(batch_idx)
 
-            for idx in batch_idx:
-                mfcc_frame, label = data[idx]
-                logits, _ = self.model.forward(mfcc_frame)
-                probs = np.exp(logits[0] - np.max(logits[0]))
-                probs = probs / (probs.sum() + 1e-8)
+            # GPU批量化: 堆叠所有帧为矩阵 (bs, input_dim)
+            X_batch = np.array([data[int(i)][0] for i in batch_idx], dtype=np.float32)
+            y_batch = np.array([data[int(i)][1] for i in batch_idx], dtype=np.int32)
 
-                loss = -np.log(probs[label] + 1e-8)
-                batch_loss += loss
+            # 单次前向传播 (全batch)
+            H1_pre = X_batch @ self.model.W1 + self.model.b1
+            H1 = np.maximum(0, H1_pre)
+            H2_pre = H1 @ self.model.W2 + self.model.b2
+            H2 = np.maximum(0, H2_pre)
+            logits = H2 @ self.model.Wy + self.model.by  # (bs, n_phonemes)
 
-                pred = int(np.argmax(probs))
-                if pred == label:
-                    batch_correct += 1
+            # 批量softmax
+            logits_max = np.max(logits, axis=1, keepdims=True)
+            exp_logits = np.exp(logits - logits_max)
+            probs = exp_logits / (np.sum(exp_logits, axis=1, keepdims=True) + 1e-8)  # (bs, n_phonemes)
 
-                dlogits = probs.copy()
-                dlogits[label] -= 1.0
-                dlogits = dlogits.reshape(1, -1)
+            # 批量交叉熵loss
+            bs_range = np.arange(bs, dtype=np.int32)
+            losses = -np.log(probs[bs_range, y_batch] + 1e-8)
+            batch_loss = np.sum(losses)
+            batch_correct = int(np.sum(np.argmax(probs, axis=1) == y_batch))
 
-                self._backward_mlp(mfcc_frame, dlogits, batch_grads)
+            # 批量反向传播
+            dlogits = probs.copy()
+            dlogits[bs_range, y_batch] -= 1.0  # (bs, n_phonemes)
 
-            n = len(batch_idx)
-            for k in batch_grads:
-                setattr(self.model, k, getattr(self.model, k) - self.lr * batch_grads[k] / n)
+            # 第3层梯度
+            gWy = H2.T @ dlogits / bs
+            gby = np.sum(dlogits, axis=0) / bs
 
-            total_loss += batch_loss / n
+            dh2 = dlogits @ self.model.Wy.T
+            dh2[H2_pre <= 0] = 0
+            gW2 = H1.T @ dh2 / bs
+            gb2 = np.sum(dh2, axis=0) / bs
+
+            dh1 = dh2 @ self.model.W2.T
+            dh1[H1_pre <= 0] = 0
+            gW1 = X_batch.T @ dh1 / bs
+            gb1 = np.sum(dh1, axis=0) / bs
+
+            # 梯度更新
+            self.model.W1 -= self.lr * gW1
+            self.model.b1 -= self.lr * gb1
+            self.model.W2 -= self.lr * gW2
+            self.model.b2 -= self.lr * gb2
+            self.model.Wy -= self.lr * gWy
+            self.model.by -= self.lr * gby
+
+            total_loss += float(batch_loss) / bs
             correct += batch_correct
             n_batches += 1
 

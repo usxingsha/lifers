@@ -1,10 +1,17 @@
 """
 Lifers CLI — 本地 AI 终端助手
 用法:
-  lifers               进入交互对话
-  lifers "问题"         单次问答
-  lifers stats          查看模型状态
-  lifers config         查看/修改配置
+  lifers                   进入交互对话
+  lifers "问题"             单次问答
+  lifers stats             查看模型状态
+  lifers config            查看/修改配置
+  lifers weights           查看所有权重文件
+  lifers weights info <f>  查看权重详情
+  lifers processes         查看运行进程
+  lifers ps kali           查看Kali进程
+  lifers training status   查看训练进度
+  lifers training corpus   查看语料统计
+  lifers training materials 查看训练材料
 """
 
 from __future__ import annotations
@@ -423,6 +430,303 @@ def cmd_config(args: list) -> int:
 
 # ── Single-shot ────────────────────────────────────────────────
 
+# ── 运维命令：权重、进程、训练 ──────────────────────────────────
+KALI_SSH = "kali@192.168.234.152"
+KALI_ROOT = "/home/kali/lifers"
+
+
+def _kali_ssh(cmd: str, timeout: int = 10) -> str:
+    """执行 Kali SSH 命令，返回输出或错误信息。"""
+    import subprocess
+    try:
+        r = subprocess.run(
+            ["ssh", "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
+             KALI_SSH, cmd],
+            capture_output=True, timeout=timeout,
+        )
+        out = r.stdout.decode("utf-8", errors="replace").strip()
+        if out:
+            return out
+        return r.stderr.decode("utf-8", errors="replace").strip() or "(empty)"
+    except Exception as e:
+        return f"(Kali 不可达: {e})"
+
+
+def cmd_weights(args: list) -> int:
+    """查看权��文件状态。用法: lifers weights [list|info <file>]"""
+    sub = args[1].lower() if len(args) > 1 else "list"
+
+    if sub == "list" or sub == "ls":
+        # 正确路径: 外层 weights/ = 项目根/weights, 内层 = lifers包/weights
+        PROJECT_ROOT = LIFERS_ROOT.parent if LIFERS_ROOT.name == "lifers" else LIFERS_ROOT
+        weight_dirs = [
+            (PROJECT_ROOT / "weights", "weights/"),
+            (LIFERS_ROOT / "weights", "lifers/weights/"),
+        ]
+        all_files = []
+        for wdir, label in weight_dirs:
+            if not wdir.is_dir():
+                continue
+            for f in sorted(wdir.glob("*.json"), key=lambda p: p.stat().st_size, reverse=True):
+                sz = f.stat().st_size
+                mt = time.strftime("%m-%d %H:%M", time.localtime(f.stat().st_mtime))
+                all_files.append((label, f.name, sz, mt))
+            for f in sorted(wdir.glob("*.npz"), key=lambda p: p.stat().st_size, reverse=True):
+                sz = f.stat().st_size
+                mt = time.strftime("%m-%d %H:%M", time.localtime(f.stat().st_mtime))
+                all_files.append((label, f.name, sz, mt))
+
+        if _HAS_RICH:
+            t = Table(title="Lifers 权重文件", box=box.ROUNDED)
+            t.add_column("位置", style="dim")
+            t.add_column("文件名")
+            t.add_column("大小", justify="right")
+            t.add_column("更新时间")
+            for label, name, sz, mt in all_files:
+                sizestr = f"{sz/1024:.0f}KB" if sz < 1024*1024 else f"{sz/1024/1024:.1f}MB"
+                t.add_row(label, name, sizestr, mt)
+            console.print(t)
+
+            # 检查重复
+            inner_names = {f[1] for f in all_files if f[0] == "lifers/weights/"}
+            outer_names = {f[1] for f in all_files if f[0] == "weights/"}
+            dups = inner_names & outer_names
+            if dups:
+                console.print(f"\n[yellow]⚠ 重复文件 ({len(dups)}): {', '.join(sorted(dups))}[/yellow]")
+        else:
+            for label, name, sz, mt in all_files:
+                sizestr = f"{sz/1024:.0f}KB" if sz < 1024*1024 else f"{sz/1024/1024:.1f}MB"
+                print(f"  {label:20s} {name:45s} {sizestr:>10s}  {mt}")
+        return 0
+
+    if sub == "info" and len(args) > 2:
+        fname = args[2]
+        PROJECT_ROOT = LIFERS_ROOT.parent if LIFERS_ROOT.name == "lifers" else LIFERS_ROOT
+        found = None
+        for wdir in [PROJECT_ROOT / "weights", LIFERS_ROOT / "weights"]:
+            cand = wdir / fname
+            if cand.is_file():
+                found = cand
+                break
+        if not found:
+            # 支持部分名称匹配
+            for wdir in [LIFERS_ROOT / "weights", LIFERS_ROOT / "lifers" / "weights"]:
+                for f in wdir.glob(f"*{fname}*"):
+                    found = f
+                    break
+        if not found:
+            print(f"未找到权重文件: {fname}")
+            return 1
+        print(f"文件: {found}")
+        print(f"路径: {found.resolve()}")
+        print(f"大小: {found.stat().st_size/1024:.0f}KB")
+        print(f"修改: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(found.stat().st_mtime))}")
+        if found.suffix == ".json":
+            try:
+                data = json.loads(found.read_text("utf-8"))
+                print(f"\n架构:")
+                for k in ["d_model", "n_heads", "n_layers", "max_seq"]:
+                    if k in data:
+                        print(f"  {k}: {data[k]}")
+                if "vocab" in data:
+                    print(f"  vocab: {len(data['vocab'])} tokens")
+                if "_npz" in data:
+                    print(f"  权重文件: {data['_npz']}")
+                    npz = found.parent / data["_npz"]
+                    if npz.is_file():
+                        print(f"  NPZ大小: {npz.stat().st_size/1024/1024:.1f}MB")
+            except Exception:
+                pass
+        return 0
+
+    print("用法: lifers weights [list|info <file>]")
+    return 1
+
+
+def cmd_processes(args: list) -> int:
+    """查看 Lifers 进程。用法: lifers processes [local|kali|all]"""
+    sub = args[1].lower() if len(args) > 1 else "local"
+
+    if sub in ("local", "all"):
+        import subprocess
+        if _HAS_RICH:
+            console.print("[bold]Windows 本地进程:[/bold]")
+        else:
+            print("=== Windows 本地进程 ===")
+        try:
+            r = subprocess.run(
+                ["powershell", "-Command",
+                 "Get-CimInstance Win32_Process | Where-Object { "
+                 "$_.CommandLine -like '*lifers*' -or $_.CommandLine -like '*train_*' "
+                 "} | Select-Object ProcessId,WorkingSetSize,CommandLine | "
+                 "ForEach-Object { '{0},{1},{2}' -f $_.ProcessId,$_.WorkingSetSize,$_.CommandLine }"],
+                capture_output=True, text=True, timeout=15, encoding="utf-8",
+            )
+            lines = [l.strip() for l in r.stdout.split("\n") if l.strip()]
+            if lines:
+                for l in lines:
+                    parts = l.split(",", 2)
+                    if len(parts) >= 3:
+                        pid = parts[0].strip()
+                        try:
+                            mem = int(parts[1].strip()) // 1024 // 1024
+                            memstr = f"{mem}MB" if mem > 0 else "?"
+                        except ValueError:
+                            memstr = "?"
+                        # 提取关键文件名
+                        cmd = parts[2].strip()
+                        for keyword in ["train_", "lifers", "cli.py", "gui_host", "monitor", "gate"]:
+                            idx = cmd.find(keyword)
+                            if idx >= 0:
+                                cmd = cmd[idx:][:80]
+                                break
+                        else:
+                            cmd = cmd[:80]
+                        print(f"  PID:{pid:>8s}  MEM:{memstr:>8s}  {cmd}")
+            else:
+                print("  (未找到Lifers进程)")
+        except Exception as e:
+            print(f"  (进程查询失败: {e})")
+
+    if sub in ("kali", "all"):
+        if _HAS_RICH:
+            console.print("\n[bold]Kali 进程:[/bold]")
+        else:
+            print("\n=== Kali 进程 ===")
+        out = _kali_ssh(
+            "ps aux --sort=-%mem | grep python | grep -v 'grep\\|applet\\|blueman' | "
+            "awk '{printf \"  PID:%-8s CPU:%-6s MEM:%-6s \", $2, $3, $4; "
+            "for(i=11;i<=NF;i++) printf \"%s \", $i; print \"\"}'",
+        )
+        print(out if out else "  (无Kali进程)")
+
+    return 0
+
+
+def cmd_training(args: list) -> int:
+    """查看训练状态和材料。用法: lifers training [status|corpus|materials]"""
+    sub = args[1].lower() if len(args) > 1 else "status"
+
+    if sub == "status":
+        if _HAS_RICH:
+            console.print("[bold]Windows 训练状态:[/bold]")
+        else:
+            print("=== Windows 训练状态 ===")
+        PROJECT_ROOT = LIFERS_ROOT.parent if LIFERS_ROOT.name == "lifers" else LIFERS_ROOT
+        # Windows
+        for wdir in [LIFERS_ROOT / "weights", PROJECT_ROOT / "weights"]:
+            sf = wdir / ".train_status.json"
+            if sf.is_file():
+                try:
+                    d = json.loads(sf.read_text("utf-8"))
+                    print(f"  模型: D={d['architecture']['d_model']} "
+                          f"tier {d['ramp']['iter']}/{d['ramp']['max']} "
+                          f"step {d['sgd']['step']}/{d['sgd']['total_steps']} "
+                          f"({d['overall_pct_approx']}%)")
+                    print(f"  词表: {d['sgd']['vocab_size']} tokens  "
+                          f"进程: PID {d.get('pid', '?')}  "
+                          f"阶段: {d.get('phase', '?')}")
+                except Exception:
+                    pass
+
+        # Kali
+        if _HAS_RICH:
+            console.print("\n[bold]Kali 训练状态:[/bold]")
+        else:
+            print("\n=== Kali 训练状态 ===")
+        out = _kali_ssh(
+            "cat /home/kali/lifers/lifers/weights/.train_status.json 2>/dev/null | "
+            "python3 -c \"import sys,json; d=json.load(sys.stdin); "
+            "print(f'  模型: D={d[\\\"architecture\\\"][\\\"d_model\\\"]} "
+            "tier {d[\\\"ramp\\\"][\\\"iter\\\"]}/{d[\\\"ramp\\\"][\\\"max\\\"]} "
+            "step {d[\\\"sgd\\\"][\\\"step\\\"]}/{d[\\\"sgd\\\"][\\\"total_steps\\\"]} "
+            "({d[\\\"overall_pct_approx\\\"]}%)'); "
+            "print(f'  进程: PID {d.get(\\\"pid\\\",\\\"?\\\")}  "
+            "阶段: {d.get(\\\"phase\\\",\\\"?\\\")}')\" 2>/dev/null"
+        )
+        print(out if out else "  (Kali 状态不可用)")
+
+        # Kali 心跳
+        hb = _kali_ssh("cat /home/kali/lifers/lifers/weights/.train_heartbeat.json 2>/dev/null")
+        if hb and "ts" in hb:
+            try:
+                hd = json.loads(hb)
+                print(f"  Kali 心跳: {hd.get('ts','?')}  loss={hd.get('loss','?')}")
+            except Exception:
+                pass
+        return 0
+
+    if sub == "corpus":
+        if _HAS_RICH:
+            console.print("[bold]训练语料统计:[/bold]")
+        else:
+            print("=== 训练语料统计 ===")
+        PROJECT_ROOT = LIFERS_ROOT.parent if LIFERS_ROOT.name == "lifers" else LIFERS_ROOT
+        corpus_paths = [
+            PROJECT_ROOT / "weights" / "training_corpus.txt",
+            LIFERS_ROOT / "weights" / "training_corpus.txt",
+        ]
+        for cp in corpus_paths:
+            if cp.is_file():
+                sz = cp.stat().st_size
+                print(f"  {cp.parent.name}/{cp.name}:")
+                print(f"    大小: {sz/1024/1024:.1f}MB")
+                try:
+                    # 只读前 10MB 用于统计
+                    with open(cp, "r", encoding="utf-8", errors="ignore") as f:
+                        sample = f.read(10_000_000)
+                    lines_est = int(sz / max(1, len(sample)) * sample.count("\n"))
+                    cn = sum(1 for c in sample if '一' <= c <= '鿿')
+                    en = sum(1 for c in sample if c.isascii() and c.isalpha())
+                    cn_ratio = cn / len(sample) * 100 if sample else 0
+                    en_ratio = en / len(sample) * 100 if sample else 0
+                    print(f"    估算行数: {lines_est:,}")
+                    print(f"    中文占比: {cn_ratio:.1f}%  英文占比: {en_ratio:.1f}%")
+                except Exception as e:
+                    print(f"    (统计失败: {e})")
+        return 0
+
+    if sub == "materials":
+        if _HAS_RICH:
+            console.print("[bold]训练材料文件:[/bold]")
+        else:
+            print("=== 训练材料文件 ===")
+        PROJECT_ROOT = LIFERS_ROOT.parent if LIFERS_ROOT.name == "lifers" else LIFERS_ROOT
+        # 语料生成脚本（在项目根目录）
+        gen_scripts = sorted(PROJECT_ROOT.glob("gen_*.py")) + sorted(PROJECT_ROOT.glob("build_*.py"))
+        scrape_scripts = sorted(PROJECT_ROOT.glob("scrape_*.py"))
+        expand_scripts = sorted(PROJECT_ROOT.glob("expand_*.py"))
+        all_gen = gen_scripts + scrape_scripts + expand_scripts
+        print(f"\n语料生成脚本 ({len(all_gen)}):")
+        for s in all_gen:
+            print(f"  {s.name} ({s.stat().st_size/1024:.0f}KB)")
+
+        # 训练脚本（在 lifers/scripts/ 下）
+        train_scripts = sorted((LIFERS_ROOT / "scripts").glob("train_*.py"))
+        print(f"\n训练脚本 ({len(train_scripts)}):")
+        for s in train_scripts:
+            print(f"  {s.name} ({s.stat().st_size/1024:.0f}KB)")
+
+        # 数据目录（项目根下）
+        data_dir = PROJECT_ROOT / "data"
+        if data_dir.is_dir():
+            total = sum(f.stat().st_size for f in data_dir.rglob("*") if f.is_file())
+            files = len(list(data_dir.rglob("*")))
+            print(f"\ndata/ 目录: {files} 文件, {total/1024/1024:.1f}MB")
+
+        # 配置文件（lifers/config/ 下）
+        config_dir = LIFERS_ROOT / "config"
+        if config_dir.is_dir():
+            cfgs = sorted(config_dir.glob("*.json"))
+            print(f"\n配置文件 ({len(cfgs)}):")
+            for c in cfgs:
+                print(f"  {c.name} ({c.stat().st_size/1024:.0f}KB)")
+        return 0
+
+    print("用法: lifers training [status|corpus|materials]")
+    return 1
+
+
 def cmd_ask(prompt: str, max_tokens: int = 80, temperature: float = 0.7) -> int:
     json_path = _find_model()
     if json_path is None:
@@ -541,6 +845,15 @@ def cmd_chat(max_tokens: int = 80, temperature: float = 0.7) -> int:
             elif cmd == "config":
                 cmd_config(parts[1:])
                 continue
+            elif cmd in ("weights", "w"):
+                cmd_weights(parts)
+                continue
+            elif cmd in ("processes", "ps", "procs"):
+                cmd_processes(parts)
+                continue
+            elif cmd in ("training", "train", "tr"):
+                cmd_training(parts)
+                continue
             elif cmd == "clear":
                 os.system("cls" if sys.platform == "win32" else "clear")
                 continue
@@ -604,7 +917,11 @@ def _help_text():
   lifers --help        显示帮助
 
 [bold]对话命令:[/bold]
-  /stats               查看模型和训练状态
+  /stats, /tr status   查看模型和训练状态
+  /weights, /w         查看所有权重文件
+  /ps, /procs          查看运行进程
+  /ps kali             查看Kali进程
+  /training, /tr       训练状态/语料/材料
   /config [key=value]  查看/设置配置项
   /clear               清屏
   /help                显示此帮助
@@ -625,8 +942,11 @@ Lifers — 本地 AI 终端助手
   lifers              交互对话
   lifers "问题"        单次问答
   lifers stats         查看模型状态
+  lifers weights       查看权重文件
+  lifers ps            查看进程
+  lifers training      训练状态/语料/材料
   lifers config        查看配置
-  对话命令: /stats /config /clear /help /quit
+  对话命令: /stats /weights /ps /training /config /clear /help /quit
 """.strip())
 
 
@@ -642,6 +962,13 @@ def main() -> int:
   lifers                    交互对话
   lifers "你好"             单次问答
   lifers stats              查看模型状态
+  lifers weights            查看所有权重文件
+  lifers weights info deep  查看Deep权重详情
+  lifers ps                 查看本地进程
+  lifers ps kali            查看Kali进程
+  lifers training status    查看训练进度
+  lifers training corpus    查看语料统计
+  lifers training materials 查看训练材料
   lifers config             查看配置
   lifers config temperature=0.5  修改配置
         """.strip(),
@@ -687,6 +1014,12 @@ def main() -> int:
             return cmd_stats()
         if cmd == "config":
             return cmd_config(args.prompt[1:])
+        if cmd in ("weights", "w"):
+            return cmd_weights(args.prompt)
+        if cmd in ("processes", "ps", "procs"):
+            return cmd_processes(args.prompt)
+        if cmd in ("training", "train", "tr"):
+            return cmd_training(args.prompt)
         if _find_model() is None:
             if _try_remote(args.prompt):
                 return 0

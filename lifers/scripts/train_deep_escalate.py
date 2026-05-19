@@ -61,20 +61,35 @@ def _snap_d_model(raw: int, n_heads: int) -> int:
 
 
 def _read_deep_env() -> tuple:
-    """Return (d_model, d_ff, max_vocab, max_seq, steps, n_layers, n_heads)."""
-    n_heads = int(os.environ.get("LIFERS_DEEP_MIN_HEADS", "8"))
-    d_model_raw = int(os.environ.get("LIFERS_DEEP_D_START", "256"))
+    """Return (d_model, d_ff, max_vocab, max_seq, steps, n_layers, n_heads).
+
+    7B模式: 更大起始规模 (D=2048, L=16, H=8, V=4096) 以加速成长。
+    """
+    target_7b = os.environ.get("LIFERS_7B_MODE", "").strip().lower() in ("1", "true", "yes", "on")
+    if target_7b:
+        defaults = {"heads": "8", "d_model": "2048", "d_ff": "8192",
+                     "vocab": "4096", "seq": "256", "steps": "400", "layers": "16"}
+    else:
+        defaults = {"heads": "8", "d_model": "256", "d_ff": str(max(1024, 256*4)),
+                     "vocab": "512", "seq": "128", "steps": "300", "layers": "10"}
+
+    n_heads = int(os.environ.get("LIFERS_DEEP_MIN_HEADS", defaults["heads"]))
+    d_model_raw = int(os.environ.get("LIFERS_DEEP_D_START", defaults["d_model"]))
     d_model = _snap_d_model(d_model_raw, n_heads)
-    d_ff = int(os.environ.get("LIFERS_DEEP_FF_START", str(max(1024, d_model * 4))))
-    max_vocab = int(os.environ.get("LIFERS_DEEP_V_START", "512"))
-    max_seq = int(os.environ.get("LIFERS_DEEP_S_START", "128"))
-    steps = int(os.environ.get("LIFERS_DEEP_STEPS_START", "300"))
-    n_layers = int(os.environ.get("LIFERS_DEEP_MIN_LAYERS", "10"))
+    d_ff = int(os.environ.get("LIFERS_DEEP_FF_START", defaults["d_ff"]))
+    max_vocab = int(os.environ.get("LIFERS_DEEP_V_START", defaults["vocab"]))
+    max_seq = int(os.environ.get("LIFERS_DEEP_S_START", defaults["seq"]))
+    steps = int(os.environ.get("LIFERS_DEEP_STEPS_START", defaults["steps"]))
+    n_layers = int(os.environ.get("LIFERS_DEEP_MIN_LAYERS", defaults["layers"]))
     return d_model, d_ff, max_vocab, max_seq, steps, n_layers, n_heads
 
 
 def _compute_growth_caps() -> dict:
-    """根据硬件实时探测计算安全的增长上限，零硬编码。"""
+    """根据硬件实时探测计算安全的增长上限，零硬编码。
+
+    7B模式 (LIFERS_7B_MODE=1): 支持 D=16384, F=65536, V=131072 以达成 7B+ 参数。
+    硬件自适应: 小显存自动降低上限。
+    """
     try:
         from lifers.core.hardware_profile import get_profile
         hw = get_profile()
@@ -86,16 +101,35 @@ def _compute_growth_caps() -> dict:
         vram_mb = 0
         gpu_ok = False
 
+    # 7B 模式: 允许环境变量覆盖最大上限
+    target_7b = os.environ.get("LIFERS_7B_MODE", "").strip().lower() in ("1", "true", "yes", "on")
+
     working_mem_mb = max(vram_mb, ram_mb) if gpu_ok else ram_mb
-    usable = working_mem_mb * 0.6  # 60% 可用于模型
 
-    # d_model cap: 基于可用内存，约 4*D*D*8bytes ≈ 32*D² bytes per param block
-    d_model_cap = max(256, min(4096, int(math.sqrt(usable * 1024 * 1024 / 64))))
+    usable = working_mem_mb * 0.6  # 基础可用内存估算
+
+    if target_7b:
+        # 7B 目标: 架构上限 = 硬上限（不受硬件约束）
+        hard_d_model = int(os.environ.get("LIFERS_DEEP_MAX_D_MODEL", "16384"))
+        hard_d_ff = int(os.environ.get("LIFERS_DEEP_MAX_FF", "65536"))
+        hard_vocab = int(os.environ.get("LIFERS_DEEP_MAX_VOCAB", "131072"))
+        hard_seq = int(os.environ.get("LIFERS_DEEP_MAX_SEQ", "2048"))
+        d_model_cap = hard_d_model
+        d_ff_cap = hard_d_ff
+        vocab_cap = hard_vocab
+        usable = working_mem_mb * 0.85  # 7B模式用更大比例
+    else:
+        # 标准模式: 保守上限
+        hard_d_model = 4096
+        hard_d_ff = 16384
+        hard_vocab = 16384
+        hard_seq = int(os.environ.get("LIFERS_DEEP_MAX_SEQ", "1024"))
+        d_model_cap = max(256, min(hard_d_model, int(math.sqrt(usable * 1024 * 1024 / 64))))
+        d_ff_cap = max(1024, min(hard_d_ff, d_model_cap * 4))
+        vocab_cap = max(512, min(hard_vocab, int(usable * 1024 / 64)))
+
     d_model_cap = (d_model_cap // 16) * 16  # snap to 16
-
-    d_ff_cap = max(1024, min(16384, d_model_cap * 4))
-    vocab_cap = max(512, min(16384, int(usable * 1024 / 64)))
-    seq_cap = max(128, min(1024, int(math.sqrt(usable * 8))))
+    seq_cap = max(128, min(hard_seq, int(math.sqrt(usable * 8))))
     steps_cap = max(500, min(50000, int(usable * 4)))
 
     return {
@@ -108,20 +142,40 @@ def _compute_growth_caps() -> dict:
 def _grow_tier_params(it: int, max_vocab: int, d_model: int, d_ff: int,
                       max_seq: int, steps: int, n_layers: int, n_heads: int,
                       target: float = float("inf")):
-    """Grow tier parameters for the next escalate iteration. 全自适应上限。"""
+    """Grow tier parameters for the next escalate iteration. 全自适应上限，7B模式无上限。"""
+    target_7b = os.environ.get("LIFERS_7B_MODE", "").strip().lower() in ("1", "true", "yes", "on")
     caps = _compute_growth_caps()
-    grow = 1.25 if (not math.isfinite(target) or _rough_est(max_vocab, d_model, d_ff, n_layers) < target * 0.01) else 1.08
-    max_heads = int(os.environ.get("LIFERS_DEEP_MAX_HEADS", "8"))
-    if it > 0 and (it + 1) % 5 == 0 and n_heads < max_heads:
+    current_params = _rough_est(max_vocab, d_model, d_ff, n_layers)
+
+    # 7B模式: 更快成长速率 (1.35x vs 1.25x)
+    if target_7b and current_params < 7_000_000_000:
+        grow = 1.35
+    else:
+        grow = 1.25 if (not math.isfinite(target) or current_params < target * 0.01) else 1.08
+
+    # n_heads: 7B模式扩展到32，标准模式16
+    max_heads = int(os.environ.get("LIFERS_DEEP_MAX_HEADS", "32" if target_7b else "16"))
+    if it > 0 and (it + 1) % 4 == 0 and n_heads < max_heads:
         n_heads += 2
-    d_model = _snap_d_model(int(min(caps["d_model"], max(d_model + 16, int(d_model * grow)))), n_heads)
+
+    d_model = _snap_d_model(int(min(caps["d_model"], max(d_model + 32, int(d_model * grow)))), n_heads)
     d_ff = int(min(caps["d_ff"], max(d_ff, int(d_model * 4))))
-    max_vocab = int(min(caps["max_vocab"], max_vocab + 128))
-    max_seq = int(min(caps["max_seq"], max_seq + 16))
-    steps = int(min(caps["max_steps"], int(steps * 1.05)))
-    max_layers = int(os.environ.get("LIFERS_DEEP_MAX_LAYERS", "16"))
+    # Vocab: 7B模式按比例增长（与D同步），标准模式线性增长
+    if target_7b:
+        max_vocab = int(min(caps["max_vocab"], max(max_vocab + 512, int(max_vocab * grow))))
+    else:
+        max_vocab = int(min(caps["max_vocab"], max_vocab + 128))
+    max_seq = int(min(caps["max_seq"], max_seq + 32 if target_7b else max_seq + 16))
+    steps = int(min(caps["max_steps"], int(steps * 1.08 if target_7b else steps * 1.05)))
+
+    # n_layers: 无上限成长 (7B模式 max 64)
+    max_layers = int(os.environ.get("LIFERS_DEEP_MAX_LAYERS", "64" if target_7b else "16"))
     if it > 0 and (it + 1) % 3 == 0 and n_layers < max_layers:
         n_layers += 1
+    # 7B: 每15tier额外+1层 (深层成长)
+    if target_7b and it > 0 and (it + 1) % 15 == 0 and n_layers < max_layers:
+        n_layers += 1
+
     return max_vocab, d_model, d_ff, max_seq, steps, n_layers, n_heads
 
 
@@ -389,14 +443,17 @@ def main() -> int:
 
     state_path = out.parent / ".deep_train_state.json"
 
-    unlimited = os.environ.get("LIFERS_ESCALATE_UNLIMITED", "0").strip() in ("1", "true", "yes")
-    target_b = float(os.environ.get("LIFERS_TARGET_PARAM_B", "10").strip() or "10")
+    # 7B 模式: 自动启用无上限成长 + 最低7B目标
+    target_7b = os.environ.get("LIFERS_7B_MODE", "").strip().lower() in ("1", "true", "yes", "on")
+    unlimited = target_7b or (os.environ.get("LIFERS_ESCALATE_UNLIMITED", "0").strip() in ("1", "true", "yes"))
+    default_target = "7" if target_7b else "10"
+    target_b = float(os.environ.get("LIFERS_TARGET_PARAM_B", default_target).strip() or default_target)
     if unlimited or target_b <= 0:
         target = float("inf")
     else:
         target = max(target_b, 0.001) * 1e9
 
-    default_mi = "999999" if unlimited else "60"
+    default_mi = "999999" if (unlimited or target_7b) else "60"
     max_iters = int(os.environ.get("LIFERS_RAMP_MAX_ITERS", default_mi).strip() or default_mi)
     max_iters = max(1, min(max_iters, 10_000_000))
 

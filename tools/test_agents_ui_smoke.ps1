@@ -78,4 +78,4 @@ if ($pycmd) {
     }
 }
 
-Write-Host 'SMOKE OK. Reload VSCodium (or your editor) after install_agents_extension.ps1; portable: rs\run_lifers_vscodium.bat uses rs\data\extensions.'
+Write-Host 'SMOKE OK. Reload VSCodium (or your editor) after install_agents_extension.ps1; portable: tools\run_lifers_vscodium.bat uses data\extensions.'

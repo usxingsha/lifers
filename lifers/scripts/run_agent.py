@@ -1,7 +1,7 @@
 """
 lifers/scripts/run_agent.py
 ──────────────────────────────────
-Main agent entry point. Called by run_lifers_agent.bat.
+Main agent entry point. Called by tools/run_lifers_agent.bat.
 Starts the persistent bridge server and handles graceful shutdown.
 
 Environment variables (set by .bat launcher):

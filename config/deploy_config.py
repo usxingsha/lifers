@@ -17,7 +17,7 @@ LOCAL_ROOT = Path(__file__).resolve().parent.parent
 LIFERS_SRC = LOCAL_ROOT / "lifers"
 
 # Remote Kali paths
-KALI_HOME = os.environ.get("LIFERS_KALI_HOME", "/home/kali/lifers")
+KALI_HOME = os.environ.get("LIFERS_KALI_HOME", f"/home/{KALI_USER}/lifers")
 KALI_LIFERS = os.environ.get("LIFERS_KALI_LIFERS", f"{KALI_HOME}/lifers")
 KALI_WEIGHTS = os.environ.get("LIFERS_KALI_WEIGHTS", f"{KALI_LIFERS}/weights")
 KALI_SCRIPTS = os.environ.get("LIFERS_KALI_SCRIPTS", f"{KALI_LIFERS}/scripts")

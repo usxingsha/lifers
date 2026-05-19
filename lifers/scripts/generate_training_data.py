@@ -19,8 +19,9 @@ from typing import List, Dict, Tuple, Optional
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+PKG_ROOT = Path(__file__).resolve().parent.parent  # lifers/ 包根
 DATA_DIR = ROOT / "data"
-CORPUS_FILE = ROOT / "weights" / "training_corpus.txt"
+CORPUS_FILE = PKG_ROOT / "weights" / "training_corpus.txt"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 通用工具

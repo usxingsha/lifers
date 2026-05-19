@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import List, Callable, Tuple
 
-ROOT = Path(__file__).resolve().parent.parent.parent
+ROOT = Path(__file__).resolve().parent.parent  # lifers/ 包根 (与训练脚本一致)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -120,7 +120,7 @@ def main() -> int:
         print(f"  ✗ {len(missing)} file(s) missing:")
         for m in missing:
             print(f"      {m}")
-        print("\n  Run bootstrap_lifers.bat to regenerate missing files.")
+        print("\n  Run powershell -File tools/bootstrap_lifers.ps1 to regenerate missing files.")
         return 1
     print("  ✓ All required files present")
     return 0

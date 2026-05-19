@@ -6,7 +6,7 @@ Python 包名 **`lifers`**；便携仓库根目录历史上曾名 **`rs`**，现
 
 ## Agents 侧栏
 
-**VSCodium / 便携**：请用便携根下的 **`run_lifers_vscodium.bat`**（扩展目录 → **`data\extensions`**）。安装/更新后 **Developer: Reload Window**。
+**VSCodium / 便携**：请用 **`tools\run_lifers_vscodium.bat`**（扩展目录 → **`data\extensions`**）。安装/更新后 **Developer: Reload Window**。
 
 **一键全量同步 UI（推荐）**：`powershell -NoProfile -ExecutionPolicy Bypass -File scripts\sync_lifers_agents_ui_windows_kali.ps1`  
 （不打断 Kali 训练加 **`-SkipTrainPause`**；同步后让训练继续加 **`-ResumeKaliTrain`**；只看 Kali 训练状态：`scripts\kali_train_status.ps1`）
@@ -61,7 +61,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ../tools/install_agents_exte
 
 仅检查：`... install_agents_extension.ps1 -VerifyOnly`（可加同一 `-EditorTargets`）。
 
-然后 **Developer: Reload Window**。便携编辑器请将 `VSCODE_PORTABLE` 指向 **`data`** 或使用 **`tools\launch_rs_editor.cmd`**（仓库根 **`run_lifers_vscodium.bat`** 同逻辑）。
+然后 **Developer: Reload Window**。便携编辑器请将 `VSCODE_PORTABLE` 指向 **`data`** 或使用 **`tools\launch_rs_editor.cmd`**（**`tools\run_lifers_vscodium.bat`** 同逻辑）。
 
 **不装 Microsoft VS Code、用自有壳 + VSCodium**：在 **`lifers/tools/lifers_editor/`** 运行 **`lifers-editor.ps1`**（Windows）或 **`lifers-editor.sh`**（Linux/Kali）。会同步 **`tools/vscodium_editor_defaults.json`** 到独立 user-data（若尚无 `User/settings.json`）、复制 Agents UI 到独立 extensions、优先 **`../shell/VSCodium`** 与系统 **VSCodium**，打开 **`lifers.code-workspace`**（若存在）。需临时用 Code/Cursor：PowerShell 加 **`-AllowProprietaryEditors`**；Bash 设 **`LIFERS_EDITOR_ALLOW_PROPRIETARY=1`**。
 
@@ -73,7 +73,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File ../tools/install_agents_exte
 
 ### Workspace / 工作区
 
-- **EN:** Deploy: **`bootstrap_lifers.bat`** or **`powershell -File tools/bootstrap_lifers.ps1`** — materialize **`lifers.code-workspace`**, **`run_integrated_bootstrap.py`**, **Lifers Agents UI**, **`sync_cursor_settings_to_vscodium.py`**, optional **`link_lifers_app.ps1`**, **`test_agents_ui_smoke.ps1`**. Tasks: **lifers: Bootstrap**, etc.
+- **EN:** Deploy: **`powershell -File tools/bootstrap_lifers.ps1`** — materialize **`lifers.code-workspace`**, **`run_integrated_bootstrap.py`**, **Lifers Agents UI**, **`sync_cursor_settings_to_vscodium.py`**, optional **`link_lifers_app.ps1`**, **`test_agents_ui_smoke.ps1`**. Tasks: **lifers: Bootstrap**, etc.
 
 - **EN:** Open **`lifers.code-workspace`**. Defaults: **`config/integrated_layout.json`**. Override: **`config/workspace_custom.json`**, then **`python tools/materialize_integrated_workspace.py`**.
 - **中文：** 打开 **`lifers.code-workspace`**。自定义同上。

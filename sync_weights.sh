@@ -1,9 +1,17 @@
 #!/bin/bash
 # 双向权重同步：Windows (主训练) ↔ Kali (备用+安全训练)
-KALI="root@192.168.234.152"
-WIN_WEIGHTS="C:/Users/Lifeline/Desktop/curku/lifers/lifers/weights"
-KALI_WEIGHTS="/home/kali/lifers/lifers/weights"
-KALI_OUTER_WEIGHTS="/home/kali/lifers/weights"
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+KALI_HOST="${LIFERS_KALI_HOST:-192.168.234.152}"
+KALI_USER="${LIFERS_KALI_USER:-kali}"
+KALI="${KALI_USER}@${KALI_HOST}"
+
+LIFERS_ROOT="${LIFERS_ROOT:-$SCRIPT_DIR}"
+WIN_WEIGHTS="${LIFERS_ROOT}/lifers/weights"
+KALI_HOME="${LIFERS_KALI_HOME:-/home/${KALI_USER}/lifers}"
+KALI_WEIGHTS="${KALI_HOME}/lifers/weights"
+KALI_OUTER_WEIGHTS="${KALI_HOME}/weights"
 
 echo "[sync] $(date '+%H:%M:%S') 开始同步..."
 
@@ -12,13 +20,11 @@ echo "[sync] deep transformer → Kali..."
 DEEP_JSON="$WIN_WEIGHTS/lifers_deep_transformer.json"
 if [ -f "$DEEP_JSON" ]; then
     scp "$DEEP_JSON" "$KALI:$KALI_WEIGHTS/" 2>&1
-    # 同步引用的 NPZ
     NPZ=$(python3 -c "import json; d=json.load(open('$DEEP_JSON')); print(d.get('_npz',''))" 2>/dev/null)
     if [ -n "$NPZ" ]; then
         echo "[sync] deep NPZ: $NPZ"
         scp "$WIN_WEIGHTS/$NPZ" "$KALI:$KALI_WEIGHTS/" 2>&1
     fi
-    # 同步 Adam 状态
     if [ -f "$WIN_WEIGHTS/lifers_deep_adam.npz" ]; then
         scp "$WIN_WEIGHTS/lifers_deep_adam.npz" "$KALI:$KALI_WEIGHTS/" 2>&1
     fi

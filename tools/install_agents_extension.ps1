@@ -1,6 +1,6 @@
 #Requires -Version 5.1
 # Copy lifers-agents-ui to extension dirs.
-# VSCodium (this repo): portable launcher rs\run_lifers_vscodium.bat uses --extensions-dir rs\data\extensions.
+# VSCodium (this repo): portable launcher tools\run_lifers_vscodium.bat uses --extensions-dir data\extensions.
 # System VSCodium / OSS Code: %USERPROFILE%\.vscode-oss\extensions
 # Use -EditorTargets Vscodium to deploy only those two (skip Cursor / VS Code market paths).
 param(
@@ -156,7 +156,7 @@ foreach ($extRoot in $extParents) {
 }
 
 Write-Host 'Done. VSCodium: Ctrl+Shift+P -> Developer: Reload Window.'
-Write-Host '  Portable: rs\run_lifers_vscodium.bat uses rs\data\extensions for extensions.'
+Write-Host '  Portable: tools\run_lifers_vscodium.bat uses data\extensions for extensions.'
 if ($EditorTargets -eq 'All') {
     Write-Host '  (Also copied to .vscode\extensions and .cursor\extensions.)'
 }

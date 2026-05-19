@@ -297,45 +297,58 @@ def _train_step_deep(
     n_layers: int,
     max_seq: int,
     np: Any,
-) -> float:
-    """Single training step: forward through N layers, backward, update."""
+    *,
+    compute_dtype: Any = None,  # FP16 compute dtype for mixed precision
+    loss_scale: float = 1.0,     # gradient scaling for FP16
+) -> tuple:
+    """Single training step: forward (可选FP16) → backward → AdamW update (FP32 master).
+    Returns (loss, overflow) where overflow=True means NaN/Inf gradients detected."""
 
-    # --- Forward ---
+    master_dtype = np.float32
+    if compute_dtype is not None and compute_dtype != master_dtype:
+        # FP16 mixed precision: cast weights to compute dtype for forward/backward
+        fp_params = {k: v.astype(compute_dtype) for k, v in params.items()}
+    else:
+        fp_params = params
+
+    # --- Forward (in compute_dtype) ---
     logits, caches = forward_deep(
         input_ids,
-        params["tok_emb"], params["pos_emb"],
-        params["Wq"], params["Wk"], params["Wv"], params["Wo"],
-        params["W1"], params["W2"], params["Wlm"],
+        fp_params["tok_emb"], fp_params["pos_emb"],
+        fp_params["Wq"], fp_params["Wk"], fp_params["Wv"], fp_params["Wo"],
+        fp_params["W1"], fp_params["W2"], fp_params["Wlm"],
         n_heads, n_layers, max_seq, np,
         training=True,
     )
     T = logits.shape[0]
     targets = np.asarray(target_ids[:T], dtype=np.intp)
 
-    # --- Loss ---
-    loss, dL_dlogits = _softmax_cross_entropy_bwd(logits, targets, np)
+    # --- Loss (use float32 for numerical stability) ---
+    logits_f32 = logits.astype(master_dtype) if compute_dtype is not None else logits
+    loss, dL_dlogits = _softmax_cross_entropy_bwd(logits_f32, targets, np)
+    dL_dlogits = dL_dlogits.astype(logits.dtype) if compute_dtype is not None else dL_dlogits
 
-    # --- Backward ---
+    # Scale loss for FP16 gradient preservation
+    if loss_scale != 1.0:
+        dL_dlogits = dL_dlogits * loss_scale
+
+    # --- Backward (in compute_dtype) ---
     grads: Dict[str, Any] = {}
 
-    # LM head: logits = Y @ Wlm
     Y = caches["Y"]
     grads["Wlm"] = Y.T @ dL_dlogits
-    dY = dL_dlogits @ params["Wlm"].T
+    dY = dL_dlogits @ fp_params["Wlm"].T
 
-    # Final LayerNorm
     dX_final = _layer_norm_bwd(dY, caches["final_ln"], np)
-
-    # Backward through layers (reverse order)
     dX = dX_final
-    # Accumulators for shared weights
+
     shared_grads = {
-        "Wq": np.zeros_like(params["Wq"]),
-        "Wk": np.zeros_like(params["Wk"]),
-        "Wv": np.zeros_like(params["Wv"]),
-        "Wo": np.zeros_like(params["Wo"]),
-        "W1": np.zeros_like(params["W1"]),
-        "W2": np.zeros_like(params["W2"]),
+        "Wq": np.zeros_like(fp_params["Wq"]),
+        "Wk": np.zeros_like(fp_params["Wk"]),
+        "Wv": np.zeros_like(fp_params["Wv"]),
+        "Wo": np.zeros_like(fp_params["Wo"]),
+        "W1": np.zeros_like(fp_params["W1"]),
+        "W2": np.zeros_like(fp_params["W2"]),
     }
 
     for layer_idx in range(n_layers - 1, -1, -1):
@@ -345,18 +358,33 @@ def _train_step_deep(
 
     grads.update(shared_grads)
 
-    # Embedding backward: dX flows into tok_emb + pos_emb
     idx = caches["tok_emb_idx"]
     t_len = caches["t_len"]
-    grads["pos_emb"] = np.zeros_like(params["pos_emb"])
-    grads["tok_emb"] = np.zeros_like(params["tok_emb"])
+    grads["pos_emb"] = np.zeros_like(fp_params["pos_emb"])
+    grads["tok_emb"] = np.zeros_like(fp_params["tok_emb"])
     grads["pos_emb"][:t_len] += dX
     np.add.at(grads["tok_emb"], idx, dX)
 
-    # --- Update ---
-    _adamw_update(params, grads, adam_state, lr, adam_t, np)
+    # --- Unscale + Check for overflow (NaN/Inf in gradients) ---
+    overflow = False
+    if loss_scale != 1.0:
+        inv_scale = 1.0 / loss_scale
+        for k in grads:
+            g = grads[k]
+            if np.any(~np.isfinite(g)):
+                overflow = True
+                break
+            grads[k] = g * inv_scale
 
-    return float(loss)
+    # Cast gradients to master dtype for Adam update
+    if compute_dtype is not None:
+        for k in grads:
+            grads[k] = grads[k].astype(master_dtype)
+
+    if not overflow:
+        _adamw_update(params, grads, adam_state, lr, adam_t, np)
+
+    return float(loss), overflow
 
 
 # ======================================================================
@@ -387,6 +415,18 @@ def train_deep_backprop(
     from lifers.core.compute_backend import get_compute_backend, get_cpu_numpy, print_backend_info
     np, device, gpu_info = get_compute_backend()
     cpu_np = get_cpu_numpy()
+
+    # FP16 混合精度: GPU 环境下自动启用（可手动关闭 LIFERS_FP16=0）
+    use_fp16 = (
+        device == "cuda"
+        and os.environ.get("LIFERS_FP16", "1").strip().lower() not in ("0", "false", "no", "off")
+    )
+    compute_dtype = np.float16 if use_fp16 else (np.float32 if device == "cuda" else np.float64)
+    master_dtype = np.float32  # master weights always float32 for stability
+
+    if use_fp16:
+        print(f"[deep-backprop] FP16 mixed precision enabled (GPU={gpu_info.get('name','?') if gpu_info else '?'})",
+              file=sys.stderr)
 
     print_backend_info()
 
@@ -419,18 +459,23 @@ def train_deep_backprop(
     if w is None:
         w = init_deep_weights(vocab, d_model, d_ff, n_heads, n_layers, max_seq, seed)
 
-    # Convert to NumPy params dict
+    # Convert to params dict — master weights in float32, compute in fp16/fp32/fp64
     params: Dict[str, Any] = {
-        "tok_emb": np.asarray(w.tok_emb, dtype=np.float64),
-        "pos_emb": np.asarray(w.pos_emb, dtype=np.float64),
-        "Wq": np.asarray(w.Wq, dtype=np.float64),
-        "Wk": np.asarray(w.Wk, dtype=np.float64),
-        "Wv": np.asarray(w.Wv, dtype=np.float64),
-        "Wo": np.asarray(w.Wo, dtype=np.float64),
-        "W1": np.asarray(w.W1, dtype=np.float64),
-        "W2": np.asarray(w.W2, dtype=np.float64),
-        "Wlm": np.asarray(w.Wlm, dtype=np.float64),
+        "tok_emb": np.asarray(w.tok_emb, dtype=master_dtype),
+        "pos_emb": np.asarray(w.pos_emb, dtype=master_dtype),
+        "Wq": np.asarray(w.Wq, dtype=master_dtype),
+        "Wk": np.asarray(w.Wk, dtype=master_dtype),
+        "Wv": np.asarray(w.Wv, dtype=master_dtype),
+        "Wo": np.asarray(w.Wo, dtype=master_dtype),
+        "W1": np.asarray(w.W1, dtype=master_dtype),
+        "W2": np.asarray(w.W2, dtype=master_dtype),
+        "Wlm": np.asarray(w.Wlm, dtype=master_dtype),
     }
+    # FP16 compute copy (如果需要混合精度)
+    if use_fp16:
+        params_fp16 = {k: v.astype(np.float16) for k, v in params.items()}
+    else:
+        params_fp16 = params
     adam_state = _adamw_init(params)
 
     # Progress config
@@ -521,6 +566,10 @@ def train_deep_backprop(
     n_data = len(ids_raw)
     seq_len = max_seq + 1
 
+    # FP16 动态 loss scale: 初始 2^16，溢出折半，稳定则翻倍
+    loss_scale = float(65536) if use_fp16 else 1.0
+    overflow_steps = 0
+
     for step in range(start_step, steps):
         if control_path is not None and (step == start_step or (step + 1) % ctrl_chk == 0):
             mode = read_train_control(control_path)
@@ -539,10 +588,24 @@ def train_deep_backprop(
         input_ids = chunk[:max_seq]
         target_ids = chunk[1:max_seq + 1]
 
-        loss_val = _train_step_deep(
+        loss_val, overflow = _train_step_deep(
             input_ids, target_ids, params, adam_state, step + 1, lr,
             n_heads, n_layers, max_seq, np,
+            compute_dtype=compute_dtype, loss_scale=loss_scale,
         )
+
+        # FP16 动态 loss scale 调整
+        if use_fp16:
+            if overflow or not np.isfinite(loss_val):
+                loss_scale = max(loss_scale * 0.5, 1.0)
+                overflow_steps = 0
+                continue  # 跳过这个 step 的 loss 累加
+            else:
+                overflow_steps += 1
+                if overflow_steps >= 2000:
+                    loss_scale = min(loss_scale * 2.0, 2.0 ** 24)
+                    overflow_steps = 0
+
         total_loss += loss_val
 
         if (step + 1) % save_every == 0 or step + 1 == steps:

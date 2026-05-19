@@ -12,6 +12,9 @@ Lifers CLI — 本地 AI 终端助手
   lifers training status   查看训练进度
   lifers training corpus   查看语料统计
   lifers training materials 查看训练材料
+  lifers sync              从Kali拉取权重
+  lifers control pause     暂停训练
+  lifers push              打包推送到Kali
 """
 
 from __future__ import annotations
@@ -431,8 +434,17 @@ def cmd_config(args: list) -> int:
 # ── Single-shot ────────────────────────────────────────────────
 
 # ── 运维命令：权重、进程、训练 ──────────────────────────────────
-KALI_SSH = "kali@192.168.234.152"
-KALI_ROOT = "/home/kali/lifers"
+
+def _kali_config():
+    """读取部署配置，返回 (ssh_target, remote_root)。"""
+    host = os.environ.get("LIFERS_KALI_HOST", "192.168.234.152")
+    user = os.environ.get("LIFERS_KALI_USER", "kali")
+    ssh = f"{user}@{host}"
+    root = os.environ.get("LIFERS_KALI_HOME", "/home/kali/lifers")
+    return ssh, root
+
+
+KALI_SSH, KALI_ROOT = _kali_config()
 
 
 def _kali_ssh(cmd: str, timeout: int = 10) -> str:
@@ -635,7 +647,7 @@ def cmd_training(args: list) -> int:
         else:
             print("\n=== Kali 训练状态 ===")
         out = _kali_ssh(
-            "cat /home/kali/lifers/lifers/weights/.train_status.json 2>/dev/null | "
+            f"cat {KALI_ROOT}/lifers/weights/.train_status.json 2>/dev/null | "
             "python3 -c \"import sys,json; d=json.load(sys.stdin); "
             "print(f'  模型: D={d[\\\"architecture\\\"][\\\"d_model\\\"]} "
             "tier {d[\\\"ramp\\\"][\\\"iter\\\"]}/{d[\\\"ramp\\\"][\\\"max\\\"]} "
@@ -647,7 +659,7 @@ def cmd_training(args: list) -> int:
         print(out if out else "  (Kali 状态不可用)")
 
         # Kali 心跳
-        hb = _kali_ssh("cat /home/kali/lifers/lifers/weights/.train_heartbeat.json 2>/dev/null")
+        hb = _kali_ssh(f"cat {KALI_ROOT}/lifers/weights/.train_heartbeat.json 2>/dev/null")
         if hb and "ts" in hb:
             try:
                 hd = json.loads(hb)
@@ -725,6 +737,301 @@ def cmd_training(args: list) -> int:
 
     print("用法: lifers training [status|corpus|materials]")
     return 1
+
+
+# ── Sync: 从 Kali 拉取权重 ───────────────────────────────────────
+
+def cmd_sync(args: list) -> int:
+    """从 Kali 同步权重文件到本地。用法: lifers sync [--force] [--watch [N]]"""
+    import subprocess
+
+    force = "--force" in args or "-f" in args
+    watch = False
+    interval = 0
+    for i, a in enumerate(args):
+        if a in ("--watch", "-w"):
+            watch = True
+            try:
+                interval = int(args[i + 1]) if i + 1 < len(args) else 120
+            except (ValueError, IndexError):
+                interval = 120
+
+    PROJECT_ROOT = LIFERS_ROOT.parent if LIFERS_ROOT.name == "lifers" else LIFERS_ROOT
+    weights_dir = PROJECT_ROOT / "weights"
+    weights_dir.mkdir(parents=True, exist_ok=True)
+
+    def _do_sync():
+        ssh, remote_root = _kali_config()
+        rw = f"{remote_root}/lifers/weights"
+        if _HAS_RICH:
+            console.print(f"[bold]同步权重:[/bold] {ssh}:{rw}")
+        else:
+            print(f"=== 同步权重: {ssh}:{rw} ===")
+
+        # Small files always sync
+        small = [".train_control", "lifers_markov.json", ".lifers_train_state.json"]
+        for fname in small:
+            try:
+                r = subprocess.run(
+                    ["scp", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes",
+                     f"{ssh}:{rw}/{fname}", str(weights_dir)],
+                    capture_output=True, timeout=30,
+                )
+                if r.returncode == 0:
+                    _wprint(f"  [green]✓[/green] {fname}")
+                else:
+                    _wprint(f"  [dim]- {fname} (not on remote)[/dim]")
+            except Exception as e:
+                _wprint(f"  [yellow]! {fname}: {e}[/yellow]")
+
+        # Large transformer - check mtime
+        tf = "lifers_transformer.json"
+        local_tf = weights_dir / tf
+        try:
+            r = subprocess.run(
+                ["ssh", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes",
+                 ssh, f"stat -c '%Y' {rw}/{tf} 2>/dev/null || echo 0"],
+                capture_output=True, timeout=15,
+            )
+            remote_mtime = int(r.stdout.decode("utf-8", errors="replace").strip() or "0")
+        except Exception:
+            remote_mtime = 0
+
+        local_mtime = 0
+        if local_tf.is_file():
+            local_mtime = int(local_tf.stat().st_mtime)
+
+        if force or remote_mtime > local_mtime or not local_tf.is_file():
+            reason = "force" if force else ("newer" if remote_mtime > local_mtime else "missing")
+            _wprint(f"  [bold]拉取 {tf}[/bold] (reason={reason})")
+            try:
+                subprocess.run(
+                    ["scp", "-o", "ConnectTimeout=60", "-o", "BatchMode=yes",
+                     f"{ssh}:{rw}/{tf}", str(local_tf)],
+                    check=True, timeout=120,
+                )
+                _wprint(f"  [green]✓[/green] {tf}")
+            except Exception as e:
+                _wprint(f"  [red]✗ {tf}: {e}[/red]")
+        else:
+            _wprint(f"  [dim]跳过 {tf} (已是最新)[/dim]")
+
+        # Deep transformer
+        dtf = "lifers_deep_transformer.json"
+        local_dtf = weights_dir / dtf
+        try:
+            r = subprocess.run(
+                ["ssh", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes",
+                 ssh, f"stat -c '%Y' {rw}/{dtf} 2>/dev/null || echo 0"],
+                capture_output=True, timeout=15,
+            )
+            remote_mtime = int(r.stdout.decode("utf-8", errors="replace").strip() or "0")
+        except Exception:
+            remote_mtime = 0
+
+        local_mtime = 0
+        if local_dtf.is_file():
+            local_mtime = int(local_dtf.stat().st_mtime)
+
+        if force or remote_mtime > local_mtime or not local_dtf.is_file():
+            reason = "force" if force else ("newer" if remote_mtime > local_mtime else "missing")
+            _wprint(f"  [bold]拉取 {dtf}[/bold] (reason={reason})")
+            try:
+                subprocess.run(
+                    ["scp", "-o", "ConnectTimeout=60", "-o", "BatchMode=yes",
+                     f"{ssh}:{rw}/{dtf}", str(local_dtf)],
+                    check=True, timeout=300,
+                )
+                _wprint(f"  [green]✓[/green] {dtf}")
+            except Exception as e:
+                _wprint(f"  [red]✗ {dtf}: {e}[/red]")
+        else:
+            _wprint(f"  [dim]跳过 {dtf} (已是最新)[/dim]")
+
+        _wprint("[green]同步完成[/green]")
+
+    if watch:
+        _wprint(f"[dim]轮询模式: {interval}s 间隔 (Ctrl+C 停止)[/dim]")
+        while True:
+            _do_sync()
+            time.sleep(interval)
+    else:
+        _do_sync()
+
+    return 0
+
+
+# ── Control: 训练控制 (本地/远端) ───────────────────────────────
+
+def cmd_control(args: list) -> int:
+    """控制训练: lifers control [pause|resume|stop|status] [local|kali|all]"""
+    sub = args[1].lower() if len(args) > 1 else "status"
+    target = args[2].lower() if len(args) > 2 else "all"
+
+    if sub not in ("pause", "resume", "stop", "status"):
+        print("用法: lifers control [pause|resume|stop|status] [local|kali|all]")
+        return 1
+
+    cmd_map = {"pause": "pause", "resume": "run", "stop": "stop"}
+
+    PROJECT_ROOT = LIFERS_ROOT.parent if LIFERS_ROOT.name == "lifers" else LIFERS_ROOT
+
+    def _local_control(action: str):
+        ctl_file = PROJECT_ROOT / "weights" / ".train_control"
+        ctl_file.parent.mkdir(parents=True, exist_ok=True)
+        old = ctl_file.read_text().strip() if ctl_file.is_file() else "(none)"
+        ctl_file.write_text(f"{action}\n")
+        _wprint(f"  本地: {old} → [bold]{action}[/bold]  ({ctl_file})")
+
+    def _kali_control(action: str):
+        ssh, remote_root = _kali_config()
+        wf = f"{remote_root}/lifers/weights"
+        out = _kali_ssh(
+            f"echo {action} > {wf}/.train_control && "
+            f"echo 'control='$(cat {wf}/.train_control)"
+        )
+        _wprint(f"  Kali: {out}")
+
+    def _local_status():
+        for wdir in [PROJECT_ROOT / "weights", LIFERS_ROOT / "weights"]:
+            ctl = wdir / ".train_control"
+            if ctl.is_file():
+                print(f"  本地控制: {ctl.read_text().strip()}  ({ctl})")
+                break
+        else:
+            print("  本地控制: (none)")
+
+    def _kali_status():
+        ssh, remote_root = _kali_config()
+        out = _kali_ssh(f"cat {remote_root}/lifers/weights/.train_control 2>/dev/null || echo '(none)'")
+        print(f"  Kali 控制: {out}")
+        # Also check processes
+        procs = _kali_ssh("pgrep -af train_lifers_escalate 2>/dev/null || echo '(none)'")
+        print(f"  Kali 训练进程: {procs}")
+
+    action = cmd_map.get(sub)
+    if action:  # pause/resume/stop
+        if target in ("local", "all"):
+            _local_control(action)
+        if target in ("kali", "all"):
+            _kali_control(action)
+    else:  # status
+        if target in ("local", "all"):
+            _local_status()
+        if target in ("kali", "all"):
+            _kali_status()
+
+    return 0
+
+
+# ── Push: 打包推送到 Kali ────────────────────────────────────────
+
+def cmd_push(args: list) -> int:
+    """打包推送到 Kali。用法: lifers push [--weights] [--data] [--skip-bootstrap]"""
+    import subprocess
+
+    include_weights = "--weights" in args or "-w" in args
+    include_data = "--data" in args
+    skip_bootstrap = "--skip-bootstrap" in args or "--no-boot" in args
+
+    PROJECT_ROOT = LIFERS_ROOT.parent if LIFERS_ROOT.name == "lifers" else LIFERS_ROOT
+    dist_dir = LIFERS_ROOT / "dist"
+    dist_dir.mkdir(parents=True, exist_ok=True)
+    tar_path = dist_dir / "lifers_kali.tar.gz"
+
+    ssh, _ = _kali_config()
+
+    # Step 1: Package
+    _wprint("[bold]打包项目...[/bold]")
+    excludes = [
+        "--exclude=.git",
+        "--exclude=third_party/openclaw/.git",
+        "--exclude=third_party/openclaw/node_modules",
+        "--exclude=third_party/claw_code_rust/target",
+        "--exclude=third_party/_refs",
+        "--exclude=lifers/.venv",
+        "--exclude=lifers/dist",
+        "--exclude=__pycache__",
+        "--exclude=**/node_modules",
+        "--exclude=shell",
+        "--exclude=.cursor",
+    ]
+    if not include_data:
+        excludes.append("--exclude=data")
+    if not include_weights:
+        excludes.append("--exclude=lifers/weights")
+
+    try:
+        subprocess.run(
+            ["tar", "-czf", str(tar_path)] + excludes + ["."],
+            cwd=str(PROJECT_ROOT), check=True, timeout=120,
+        )
+        sz_mb = tar_path.stat().st_size / 1024 / 1024
+        _wprint(f"  [green]✓[/green] {tar_path.name} ({sz_mb:.1f}MB)")
+    except subprocess.CalledProcessError as e:
+        _wprint(f"[red]打包失败: {e}[/red]")
+        return 1
+
+    # Step 2: Pause remote training
+    _wprint("[bold]暂停远程训练...[/bold]")
+    try:
+        r = subprocess.run(
+            ["ssh", "-o", "ConnectTimeout=10", "-o", "BatchMode=yes",
+             ssh, f"echo pause > {KALI_ROOT}/lifers/weights/.train_control"],
+            capture_output=True, timeout=15,
+        )
+        _wprint("  [green]✓[/green] 远程训练已暂停")
+    except Exception as e:
+        _wprint(f"  [yellow]! 暂停失败 (继续推送): {e}[/yellow]")
+
+    # Step 3: SCP to Kali
+    remote_tar = "/tmp/lifers_kali_push.tar.gz"
+    _wprint(f"[bold]推送到 {ssh}...[/bold]")
+    try:
+        subprocess.run(
+            ["scp", "-o", "ConnectTimeout=60", "-o", "BatchMode=yes",
+             str(tar_path), f"{ssh}:{remote_tar}"],
+            check=True, timeout=300,
+        )
+        _wprint("  [green]✓[/green] 推送完成")
+    except subprocess.CalledProcessError as e:
+        _wprint(f"[red]推送失败: {e}[/red]")
+        return 1
+
+    # Step 4: Extract and bootstrap on Kali
+    remote_root = KALI_ROOT
+    extract_cmd = (
+        f"mkdir -p {remote_root} && "
+        f"tar -xzf {remote_tar} -C {remote_root} && "
+        f"rm -f {remote_tar} && "
+        f"chmod +x {remote_root}/lifers/scripts/remote_kali_bootstrap_train_loop.sh"
+    )
+
+    if skip_bootstrap:
+        extract_cmd += " && echo 'extracted only (skip bootstrap)'"
+    else:
+        extract_cmd += f" && exec bash {remote_root}/lifers/scripts/remote_kali_bootstrap_train_loop.sh"
+
+    _wprint(f"[bold]{'解压' if skip_bootstrap else '解压+启动训练循环'}...[/bold]")
+    try:
+        r = subprocess.run(
+            ["ssh", "-o", "ConnectTimeout=30", "-o", "BatchMode=yes", ssh, extract_cmd],
+            capture_output=True, timeout=120,
+        )
+        for line in r.stdout.decode("utf-8", errors="replace").split("\n"):
+            if line.strip():
+                _wprint(f"  {line}")
+        if r.returncode != 0:
+            _wprint(f"[yellow]远程执行警告 (exit={r.returncode})[/yellow]")
+    except Exception as e:
+        _wprint(f"[red]远程执行失败: {e}[/red]")
+        _wprint(f"[dim]手动执行: ssh {ssh} 'bash {remote_root}/lifers/scripts/remote_kali_bootstrap_train_loop.sh'[/dim]")
+        return 1
+
+    _wprint("[green]推送完成[/green]")
+    if not skip_bootstrap:
+        _wprint(f"[dim]Kali 接入: ssh {ssh} -t tmux attach -t lifers-stack[/dim]")
+    return 0
 
 
 def cmd_ask(prompt: str, max_tokens: int = 80, temperature: float = 0.7) -> int:
@@ -854,6 +1161,15 @@ def cmd_chat(max_tokens: int = 80, temperature: float = 0.7) -> int:
             elif cmd in ("training", "train", "tr"):
                 cmd_training(parts)
                 continue
+            elif cmd in ("sync", "pull"):
+                cmd_sync(parts)
+                continue
+            elif cmd in ("control", "ctl"):
+                cmd_control(parts)
+                continue
+            elif cmd in ("push",):
+                cmd_push(parts)
+                continue
             elif cmd == "clear":
                 os.system("cls" if sys.platform == "win32" else "clear")
                 continue
@@ -945,8 +1261,11 @@ Lifers — 本地 AI 终端助手
   lifers weights       查看权重文件
   lifers ps            查看进程
   lifers training      训练状态/语料/材料
+  lifers sync          从Kali拉取权重
+  lifers control       训练控制(pause/resume/stop)
+  lifers push          打包推送到Kali
   lifers config        查看配置
-  对话命令: /stats /weights /ps /training /config /clear /help /quit
+  对话命令: /stats /weights /ps /training /sync /control /push /config /clear /help /quit
 """.strip())
 
 
@@ -969,6 +1288,15 @@ def main() -> int:
   lifers training status    查看训练进度
   lifers training corpus    查看语料统计
   lifers training materials 查看训练材料
+  lifers sync               从Kali拉取权重
+  lifers sync --force       强制同步
+  lifers sync --watch 300   每5分钟轮询
+  lifers control pause      暂停本地训练
+  lifers control resume kali  恢复Kali训练
+  lifers control status all   查看所有控制状态
+  lifers push               打包推送到Kali
+  lifers push --weights     含权重推送
+  lifers push --skip-bootstrap 只推送不解压启动
   lifers config             查看配置
   lifers config temperature=0.5  修改配置
         """.strip(),
@@ -1020,6 +1348,12 @@ def main() -> int:
             return cmd_processes(args.prompt)
         if cmd in ("training", "train", "tr"):
             return cmd_training(args.prompt)
+        if cmd in ("sync", "pull"):
+            return cmd_sync(args.prompt)
+        if cmd in ("control", "ctl"):
+            return cmd_control(args.prompt)
+        if cmd in ("push",):
+            return cmd_push(args.prompt)
         if _find_model() is None:
             if _try_remote(args.prompt):
                 return 0

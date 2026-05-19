@@ -1,9 +1,18 @@
 #!/bin/bash
 # 全支柱训练监控 + 双向权重同步
-KALI="root@192.168.234.152"
-WIN_WEIGHTS="C:/Users/Lifeline/Desktop/curku/lifers/lifers/weights"
-KALI_WEIGHTS="/home/kali/lifers/lifers/weights"
-LOG="C:/Users/Lifeline/Desktop/curku/lifers/training_monitor.log"
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+KALI_HOST="${LIFERS_KALI_HOST:-192.168.234.152}"
+KALI_USER="${LIFERS_KALI_USER:-kali}"
+KALI="${KALI_USER}@${KALI_HOST}"
+
+# 动态路径推导，不再硬编码用户名
+LIFERS_ROOT="${LIFERS_ROOT:-$SCRIPT_DIR}"
+WIN_WEIGHTS="${LIFERS_ROOT}/lifers/weights"
+KALI_HOME="${LIFERS_KALI_HOME:-/home/${KALI_USER}/lifers}"
+KALI_WEIGHTS="${KALI_HOME}/lifers/weights"
+LOG="${LIFERS_ROOT}/training_monitor.log"
 
 while true; do
     echo "" >> "$LOG"
@@ -22,7 +31,7 @@ print(f\"D={s['architecture']['d_model']} L=? tier={s['ramp']['iter']}/{s['ramp'
     fi
 
     # 2. Kali 训练状态
-    KALI_STATUS=$(ssh "$KALI" "cat /home/kali/lifers/lifers/weights/.kali_train_status.json 2>/dev/null" 2>/dev/null)
+    KALI_STATUS=$(ssh "$KALI" "cat ${KALI_WEIGHTS}/.kali_train_status.json 2>/dev/null" 2>/dev/null)
     if [ -n "$KALI_STATUS" ]; then
         KALI_PHASE=$(echo "$KALI_STATUS" | python -c "import json,sys; d=json.load(sys.stdin); print(d.get('phase','?'), d.get('current_pillar',''))" 2>/dev/null)
         echo "[KALI] $KALI_PHASE" >> "$LOG"

@@ -27,8 +27,10 @@ if _config_path.exists():
     KALI_HOST = f"{_cfg.KALI_USER}@{_cfg.KALI_HOST}"
     KALI_WEIGHTS = _cfg.KALI_WEIGHTS
 else:
-    KALI_HOST = os.environ.get("LIFERS_KALI_HOST", "kali@192.168.234.152")
-    KALI_WEIGHTS = os.environ.get("LIFERS_KALI_WEIGHTS", "/home/kali/lifers/lifers/weights")
+    _kali_host = os.environ.get("LIFERS_KALI_HOST", "192.168.234.152")
+    _kali_user = os.environ.get("LIFERS_KALI_USER", "kali")
+    KALI_HOST = f"{_kali_user}@{_kali_host}"
+    KALI_WEIGHTS = os.environ.get("LIFERS_KALI_WEIGHTS", f"/home/{_kali_user}/lifers/lifers/weights")
 
 PILLAR_WEIGHT_FILES = {
     "deep_escalate": "lifers_deep_transformer.json",

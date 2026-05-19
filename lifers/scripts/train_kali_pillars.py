@@ -1,7 +1,7 @@
 """
 Kali 全支柱训练 — 安全+感知+主动+社交 并行训练
 Kali 4vCPU 轻量训练，Windows 负责 Deep Escalate
-权重输出: /home/kali/lifers/lifers/weights/lifers_*.json
+权重输出: $LIFERS_KALI_HOME/lifers/weights/lifers_*.json
 """
 from __future__ import annotations
 

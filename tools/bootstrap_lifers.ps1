@@ -117,4 +117,4 @@ if ($missing.Count -gt 0) {
     Write-Warning "$($missing.Count) critical file(s) missing — see above"
     exit 1
 }
-Write-Host "All checks passed. Run run_lifers_agent.bat to start." -ForegroundColor Green
+Write-Host "All checks passed. Run tools\run_lifers_agent.bat to start." -ForegroundColor Green

@@ -128,9 +128,9 @@ _SAFE_NGRAMS = [
 ]
 
 
-def _safety_feature(text: str) -> np.ndarray:
+def _safety_feature(text: str) -> "np.ndarray":
     """提取安全特征 — 256维 (关键词70 + safe70 + ngram52 + 统计20 + 交叉22)"""
-    feat = np.zeros(256, dtype=np.float32)
+    feat = cpu_np.zeros(256, dtype=cpu_np.float32)
     text_lower = text.lower()
 
     # 危险关键词 (slot 0-69)

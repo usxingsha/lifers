@@ -1,5 +1,5 @@
 {
-  "suite": "C:\\Users\\Lifeline\\Desktop\\curku\\lifers\\lifers\\eval\\suites\\v001",
+  "suite": "lifers/eval/suites/v001",
   "cases": 20,
   "passed": 19,
   "pass_rate": 0.95,

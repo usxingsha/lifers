@@ -126,7 +126,7 @@ if (Test-Path -LiteralPath $portableRepair) {
 
 Write-Host "== [4/4] Optional: open Cursor =="
 if (!$SkipCursor) {
-  $cursor = "D:\ai\CURSOR\cursor\Cursor.exe"
+  $cursor = "$env:LOCALAPPDATA\Programs\Cursor\Cursor.exe"
   if (Test-Path $cursor) {
     Start-Process $cursor -ArgumentList @("-n", $BrainRoot)
   } else {

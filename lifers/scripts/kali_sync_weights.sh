@@ -21,7 +21,6 @@ if [[ -z "$TARGET" ]]; then
   if [[ -d "/mnt/c" ]]; then
     for candidate in \
       "/mnt/c/Users/$USER/Desktop/curku/lifers/lifers/weights" \
-      "/mnt/c/Users/Lifeline/Desktop/curku/lifers/lifers/weights" \
     ; do
       if [[ -d "$candidate" ]]; then
         TARGET="$candidate"

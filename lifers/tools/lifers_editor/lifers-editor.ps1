@@ -53,7 +53,7 @@ if ($AllowProprietaryEditors) {
   $extra = @(
     "${env:LocalAppData}\Programs\Microsoft VS Code\Code.exe",
     "${env:ProgramFiles}\Microsoft VS Code\Code.exe",
-    "D:\ai\CURSOR\cursor\Cursor.exe"
+    "${env:LocalAppData}\Programs\Cursor\Cursor.exe"
   ) | Where-Object { Test-Path $_ }
   $candidates = @($candidates) + @($extra)
 }

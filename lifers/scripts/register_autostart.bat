@@ -19,7 +19,7 @@ echo 脚本路径: %PS1%
 schtasks /Delete /TN "%TASK_NAME%" /F >nul 2>&1
 
 :: 创建新任务：开机启动 + 每隔 10 分钟检查是否在运行（自动拉起）
-schtasks /Create /TN "%TASK_NAME%" /SC ONSTART /RU "Lifeline" ^
+schtasks /Create /TN "%TASK_NAME%" /SC ONSTART /RU "%USERNAME%" ^
   /TR "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File \"%PS1%\"" ^
   /F /RL HIGHEST /DELAY 0001:00
 

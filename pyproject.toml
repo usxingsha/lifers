@@ -24,6 +24,7 @@ chroma = ["chromadb>=0.4"]
 lancedb = ["lancedb>=0.15"]
 embeddings = ["sentence-transformers>=2.2"]
 license = {text = "MIT"}
+authors = [{name = "Lifeline"}]
 
 [project.scripts]
 lifers = "lifers.scripts.cli:main"
@@ -31,3 +32,6 @@ lifers = "lifers.scripts.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["lifers", "lifers.*"]
+
+[tool.ruff]
+line-length = 100

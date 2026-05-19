@@ -6,8 +6,8 @@
 # 提示: 推荐使用 `lifers sync` CLI 命令（统一界面）
 set -euo pipefail
 
-KALI="${1:-kali@192.168.234.152}"
-KALI_WEIGHTS="/home/kali/lifers/lifers/weights"
+KALI="${1:-${LIFERS_KALI_USER:-kali}@${LIFERS_KALI_HOST:-192.168.234.152}}"
+KALI_WEIGHTS="${LIFERS_KALI_WEIGHTS:-/home/${LIFERS_KALI_USER:-kali}/lifers/lifers/weights}"
 WIN_WEIGHTS="$(cd "$(dirname "$0")/.." && pwd)/lifers/weights"
 SYNC_DEEP=false
 for a in "$@"; do [[ "$a" == "--deep" ]] && SYNC_DEEP=true; done
